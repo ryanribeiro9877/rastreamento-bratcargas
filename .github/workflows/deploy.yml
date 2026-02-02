@@ -1,0 +1,143 @@
+# .github/workflows/deploy.yml - CI/CD com GitHub Actions
+
+name: Deploy Braticargas
+
+# Quando executar
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # Permite executar manualmente
+
+# Variáveis de ambiente
+env:
+  NODE_VERSION: '18'
+
+jobs:
+  # Job 1: Testes e Build
+  build:
+    name: Build e Testes
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. Checkout do código
+      - name: 📥 Checkout código
+        uses: actions/checkout@v3
+      
+      # 2. Configurar Node.js
+      - name: 📦 Configurar Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      # 3. Instalar dependências
+      - name: 📦 Instalar dependências
+        run: npm ci
+      
+      # 4. Executar linter (se configurado)
+      - name: 🔍 Lint
+        run: npm run lint --if-present
+        continue-on-error: true
+      
+      # 5. Build
+      - name: 🏗️ Build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_EMAIL_COOPERATIVA: ${{ secrets.VITE_EMAIL_COOPERATIVA }}
+      
+      # 6. Upload do build como artifact
+      - name: 📤 Upload build artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
+
+  # Job 2: Deploy (só roda no push para main)
+  deploy:
+    name: Deploy para Produção
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    
+    steps:
+      # 1. Download do build artifact
+      - name: 📥 Download build artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: dist
+          path: dist/
+      
+      # 2. Deploy para Vercel
+      - name: 🚀 Deploy para Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+          working-directory: ./
+      
+      # OU Deploy para VPS via SSH (alternativa)
+      # - name: 🚀 Deploy para VPS
+      #   uses: appleboy/scp-action@master
+      #   with:
+      #     host: ${{ secrets.VPS_HOST }}
+      #     username: ${{ secrets.VPS_USERNAME }}
+      #     key: ${{ secrets.VPS_SSH_KEY }}
+      #     source: "dist/"
+      #     target: "/var/www/braticargas/"
+      # 
+      # - name: 🔄 Restart Nginx
+      #   uses: appleboy/ssh-action@master
+      #   with:
+      #     host: ${{ secrets.VPS_HOST }}
+      #     username: ${{ secrets.VPS_USERNAME }}
+      #     key: ${{ secrets.VPS_SSH_KEY }}
+      #     script: |
+      #       sudo systemctl reload nginx
+      #       echo "Deploy concluído!"
+
+  # Job 3: Notificação (opcional)
+  notify:
+    name: Notificar Deploy
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: 📧 Notificar sucesso
+        if: success()
+        run: |
+          echo "✅ Deploy realizado com sucesso!"
+          # Aqui você pode adicionar notificação por email, Slack, etc.
+      
+      - name: 📧 Notificar falha
+        if: failure()
+        run: |
+          echo "❌ Deploy falhou!"
+          # Aqui você pode adicionar notificação de erro
+
+# Configuração de Secrets necessários:
+# 
+# Para Vercel:
+# - VERCEL_TOKEN: Token da Vercel (pegar em: https://vercel.com/account/tokens)
+# - VERCEL_ORG_ID: ID da organização (pegar em: https://vercel.com/teams/settings)
+# - VERCEL_PROJECT_ID: ID do projeto (pegar no projeto → Settings)
+# - VITE_SUPABASE_URL: URL do Supabase
+# - VITE_SUPABASE_ANON_KEY: Chave anônima do Supabase
+# - VITE_EMAIL_COOPERATIVA: Email da cooperativa
+#
+# Para VPS:
+# - VPS_HOST: IP ou domínio do servidor
+# - VPS_USERNAME: Usuário SSH
+# - VPS_SSH_KEY: Chave privada SSH
+#
+# Como adicionar secrets:
+# 1. Vá em: https://github.com/seu-usuario/braticargas/settings/secrets/actions
+# 2. Clique em "New repository secret"
+# 3. Adicione cada secret acima

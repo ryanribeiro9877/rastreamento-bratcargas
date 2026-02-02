@@ -1,0 +1,35 @@
+# docker-compose.yml - Orquestração de Containers
+
+version: '3.8'
+
+services:
+  # Aplicação Frontend
+  braticargas-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: braticargas-frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+      - VITE_EMAIL_COOPERATIVA=${VITE_EMAIL_COOPERATIVA}
+    restart: unless-stopped
+    networks:
+      - braticargas-network
+    volumes:
+      # Volume para SSL/Certificados (se necessário)
+      - ./certs:/etc/nginx/certs:ro
+      # Volume para logs
+      - ./logs/nginx:/var/log/nginx
+
+networks:
+  braticargas-network:
+    driver: bridge
+
+# Volumes persistentes
+volumes:
+  certs:
+  logs:
