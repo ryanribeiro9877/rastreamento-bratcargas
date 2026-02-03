@@ -6,7 +6,7 @@ import { UFS } from '../../utils/formatters';
 
 interface FiltrosCargasProps {
   filtros: FiltrosCargas;
-  onChange: (filtros: FiltrosCargas) = void;
+  onChange: (filtros: FiltrosCargas) => void;
   showEmbarcadorFilter?: boolean;
 }
 

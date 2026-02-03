@@ -12,12 +12,14 @@ import type { PosicaoGPS } from '../types';
  * - Traccar
  * - Wialon
  * - Custom API
+ * - Google Fleet Engine (opcional)
  */
 
 interface ConfigAPI {
   baseUrl: string;
   apiKey: string;
   intervaloAtualizacao: number; // em minutos
+  usarFleetEngine: boolean; // Ativar/desativar Fleet Engine
 }
 
 class RastreamentoService {

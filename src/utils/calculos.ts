@@ -68,12 +68,12 @@ export function calcularStatusPrazo(
   );
   
   // Calcular distância restante
-  const distanciaRestante = calcularDistancia(
+  const distanciaRestante = carga.destino_lat && carga.destino_lng ? calcularDistancia(
     ultimaPosicao.latitude,
     ultimaPosicao.longitude,
     carga.destino_lat,
     carga.destino_lng
-  );
+  ) : 0;
   
   // Percentual percorrido
   const percentualPercorrido = (distanciaPercorrida / carga.distancia_total_km) * 100;
