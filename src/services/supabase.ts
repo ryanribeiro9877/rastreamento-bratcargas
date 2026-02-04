@@ -39,9 +39,12 @@ export const getUserProfile = async (userId: string) => {
       embarcador:embarcadores(*)
     `)
     .eq('user_id', userId)
-    .single();
+    .maybeSingle();
   
-  if (error) throw error;
+  if (error) {
+    console.error('Erro ao buscar perfil:', error);
+    return null;
+  }
   return data;
 };
 

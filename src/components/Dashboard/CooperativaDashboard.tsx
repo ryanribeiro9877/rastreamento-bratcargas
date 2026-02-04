@@ -326,8 +326,8 @@ export default function CooperativaDashboard() {
 
       {/* Modal de Cadastro */}
       {showCadastro && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full my-8">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999] overflow-y-auto animate-fade-in">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full my-8 relative z-[10000] animate-fade-in-scale">
             <CargaForm
               onSuccess={() => {
                 setShowCadastro(false);
@@ -341,8 +341,8 @@ export default function CooperativaDashboard() {
 
       {/* Modal de Detalhes (similar ao do embarcador) */}
       {cargaSelecionada && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999] animate-fade-in">
+          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto animate-fade-in-scale">
             <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex items-center justify-between">
               <h3 className="text-2xl font-bold text-gray-900">
                 Detalhes da Carga - NF {cargaSelecionada.nota_fiscal}

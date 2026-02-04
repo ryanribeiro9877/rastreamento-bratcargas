@@ -23,11 +23,38 @@ export function useAuth() {
   });
 
   useEffect(() => {
+    let isMounted = true;
+
     // Verificar sessão atual
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (!isMounted) return;
+      
+      if (error) {
+        console.error('Erro ao obter sessão:', error);
+        setAuthState({
+          user: null,
+          profile: null,
+          loading: false,
+          isCooperativa: false,
+          isEmbarcador: false
+        });
+        return;
+      }
+
       if (session?.user) {
         loadUserProfile(session.user);
       } else {
+        setAuthState({
+          user: null,
+          profile: null,
+          loading: false,
+          isCooperativa: false,
+          isEmbarcador: false
+        });
+      }
+    }).catch((err) => {
+      console.error('Erro crítico ao obter sessão:', err);
+      if (isMounted) {
         setAuthState({
           user: null,
           profile: null,
@@ -55,17 +82,24 @@ export function useAuth() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   async function loadUserProfile(user: User) {
     try {
       // Verificar se é usuário da cooperativa (admin)
-      const { data: adminCheck } = await supabase
+      const { data: adminCheck, error: adminError } = await supabase
         .from('usuarios_cooperativa')
         .select('id')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
+
+      if (adminError) {
+        console.error('Erro ao verificar cooperativa:', adminError);
+      }
 
       if (adminCheck) {
         setAuthState({
@@ -85,7 +119,7 @@ export function useAuth() {
         profile,
         loading: false,
         isCooperativa: false,
-        isEmbarcador: true
+        isEmbarcador: Boolean(profile)
       });
     } catch (error) {
       console.error('Erro ao carregar perfil:', error);

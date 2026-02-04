@@ -8,6 +8,7 @@ import DashboardMetrics from './DashboardMetrics';
 import FiltrosCargas from '../Filtros/FiltrosCargas';
 import MapaRastreamento from '../Mapa/MapaRastreamento';
 import CargaStatus, { StatusBadge } from '../Cargas/CargaStatus';
+import CargaForm from '../Cargas/CargaForm';
 import type { FiltrosCargas as FiltrosCargasType, Carga } from '../../types';
 import { formatarDataHora, formatarToneladas, formatarTempoRelativo } from '../../utils/formatters';
 
@@ -16,6 +17,7 @@ export default function EmbarcadorDashboard() {
   const [filtros, setFiltros] = useState<FiltrosCargasType>({});
   const [cargaSelecionada, setCargaSelecionada] = useState<Carga | null>(null);
   const [viewMode, setViewMode] = useState<'lista' | 'mapa'>('lista');
+  const [showCadastro, setShowCadastro] = useState(false);
 
   const { cargas, loading, refetch } = useCargas(profile?.embarcador_id, filtros);
   const { metricas, loading: loadingMetricas } = useMetricasDashboard(profile?.embarcador_id);
@@ -42,13 +44,27 @@ export default function EmbarcadorDashboard() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Minhas Cargas
-        </h1>
-        <p className="text-gray-600">
-          {profile?.embarcador?.razao_social}
-        </p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Minhas Cargas
+          </h1>
+          <p className="text-gray-600">
+            {profile?.embarcador?.razao_social}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowCadastro(true)}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 transition"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Nova Carga
+          </button>
+        </div>
       </div>
 
       {/* Métricas */}
@@ -113,6 +129,17 @@ export default function EmbarcadorDashboard() {
               </svg>
               <h3 className="mt-2 text-sm font-medium text-gray-900">Nenhuma carga encontrada</h3>
               <p className="mt-1 text-sm text-gray-500">Ajuste os filtros ou aguarde novas cargas.</p>
+              <div className="mt-6">
+                <button
+                  onClick={() => setShowCadastro(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 transition"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Criar primeira carga
+                </button>
+              </div>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -193,8 +220,8 @@ export default function EmbarcadorDashboard() {
 
       {/* Modal de Detalhes da Carga */}
       {cargaSelecionada && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999] animate-fade-in">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-fade-in-scale">
             <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex items-center justify-between">
               <h3 className="text-2xl font-bold text-gray-900">
                 Detalhes da Carga - NF {cargaSelecionada.nota_fiscal}
@@ -256,6 +283,21 @@ export default function EmbarcadorDashboard() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showCadastro && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999] overflow-y-auto animate-fade-in">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full my-8 animate-fade-in-scale">
+            <CargaForm
+              embarcadorId={profile?.embarcador_id}
+              onSuccess={() => {
+                setShowCadastro(false);
+                refetch();
+              }}
+              onCancel={() => setShowCadastro(false)}
+            />
           </div>
         </div>
       )}

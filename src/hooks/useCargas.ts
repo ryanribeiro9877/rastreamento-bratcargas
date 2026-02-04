@@ -1,6 +1,6 @@
 // hooks/useCargas.ts - Hook para gerenciar cargas
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../services/supabase';
 import type { Carga, CargaFormData, FiltrosCargas, MetricasDashboard } from '../types';
 import { calcularDistanciaTotal } from '../utils/calculos';
@@ -10,14 +10,35 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Memorizar os filtros serializados para evitar loops infinitos
+  const filtrosSerializados = useMemo(() => {
+    if (!filtros) return '{}';
+    return JSON.stringify(filtros);
+  }, [
+    filtros?.status?.join(','),
+    filtros?.status_prazo?.join(','),
+    filtros?.nota_fiscal,
+    filtros?.origem_uf,
+    filtros?.destino_uf,
+    filtros?.motorista_nome,
+    filtros?.placa_veiculo,
+    filtros?.data_carregamento_inicio,
+    filtros?.data_carregamento_fim,
+    filtros?.prazo_entrega_inicio,
+    filtros?.prazo_entrega_fim
+  ]);
+
   useEffect(() => {
     fetchCargas();
-  }, [embarcadorId, JSON.stringify(filtros)]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embarcadorId, filtrosSerializados]);
 
   async function fetchCargas() {
     try {
       setLoading(true);
       setError(null);
+
+      const filtrosObj = filtros || {};
 
       let query = supabase
         .from('cargas')
@@ -35,50 +56,48 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
       }
 
       // Aplicar filtros adicionais
-      if (filtros) {
-        if (filtros.status && filtros.status.length > 0) {
-          query = query.in('status', filtros.status);
-        }
+      if (filtrosObj.status && filtrosObj.status.length > 0) {
+        query = query.in('status', filtrosObj.status);
+      }
 
-        if (filtros.status_prazo && filtros.status_prazo.length > 0) {
-          query = query.in('status_prazo', filtros.status_prazo);
-        }
+      if (filtrosObj.status_prazo && filtrosObj.status_prazo.length > 0) {
+        query = query.in('status_prazo', filtrosObj.status_prazo);
+      }
 
-        if (filtros.nota_fiscal) {
-          query = query.ilike('nota_fiscal', `%${filtros.nota_fiscal}%`);
-        }
+      if (filtrosObj.nota_fiscal) {
+        query = query.ilike('nota_fiscal', `%${filtrosObj.nota_fiscal}%`);
+      }
 
-        if (filtros.origem_uf) {
-          query = query.eq('origem_uf', filtros.origem_uf);
-        }
+      if (filtrosObj.origem_uf) {
+        query = query.eq('origem_uf', filtrosObj.origem_uf);
+      }
 
-        if (filtros.destino_uf) {
-          query = query.eq('destino_uf', filtros.destino_uf);
-        }
+      if (filtrosObj.destino_uf) {
+        query = query.eq('destino_uf', filtrosObj.destino_uf);
+      }
 
-        if (filtros.motorista_nome) {
-          query = query.ilike('motorista_nome', `%${filtros.motorista_nome}%`);
-        }
+      if (filtrosObj.motorista_nome) {
+        query = query.ilike('motorista_nome', `%${filtrosObj.motorista_nome}%`);
+      }
 
-        if (filtros.placa_veiculo) {
-          query = query.ilike('placa_veiculo', `%${filtros.placa_veiculo}%`);
-        }
+      if (filtrosObj.placa_veiculo) {
+        query = query.ilike('placa_veiculo', `%${filtrosObj.placa_veiculo}%`);
+      }
 
-        if (filtros.data_carregamento_inicio) {
-          query = query.gte('data_carregamento', filtros.data_carregamento_inicio);
-        }
+      if (filtrosObj.data_carregamento_inicio) {
+        query = query.gte('data_carregamento', filtrosObj.data_carregamento_inicio);
+      }
 
-        if (filtros.data_carregamento_fim) {
-          query = query.lte('data_carregamento', filtros.data_carregamento_fim);
-        }
+      if (filtrosObj.data_carregamento_fim) {
+        query = query.lte('data_carregamento', filtrosObj.data_carregamento_fim);
+      }
 
-        if (filtros.prazo_entrega_inicio) {
-          query = query.gte('prazo_entrega', filtros.prazo_entrega_inicio);
-        }
+      if (filtrosObj.prazo_entrega_inicio) {
+        query = query.gte('prazo_entrega', filtrosObj.prazo_entrega_inicio);
+      }
 
-        if (filtros.prazo_entrega_fim) {
-          query = query.lte('prazo_entrega', filtros.prazo_entrega_fim);
-        }
+      if (filtrosObj.prazo_entrega_fim) {
+        query = query.lte('prazo_entrega', filtrosObj.prazo_entrega_fim);
       }
 
       const { data, error: fetchError } = await query;

@@ -5,6 +5,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Carga } from '../../types';
 import { useAutoRefresh } from '../../hooks/useRealtime';
+import { getMapboxRoute } from '../../services/mapboxDirections';
 
 interface MapaRastreamentoProps {
   cargas: Carga[];
@@ -25,7 +26,10 @@ export default function MapaRastreamento({
 }: MapaRastreamentoProps) {
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
+  const routeRef = useRef<L.Polyline | null>(null);
+  const routeRequestIdRef = useRef(0);
   const [lastUpdate, setLastUpdate] = useState(new Date());
+  const [cargaSelecionadaId, setCargaSelecionadaId] = useState<string | null>(null);
 
   // Configurar auto-refresh
   useAutoRefresh(() => {
@@ -53,6 +57,56 @@ export default function MapaRastreamento({
     };
   }, []);
 
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    if (!cargaSelecionadaId) {
+      if (routeRef.current) {
+        routeRef.current.remove();
+        routeRef.current = null;
+      }
+      return;
+    }
+
+    const cargaSelecionada = cargas.find((c) => c.id === cargaSelecionadaId);
+    if (!cargaSelecionada) return;
+
+    const origem = cargaSelecionada.ultima_posicao
+      ? { lat: cargaSelecionada.ultima_posicao.latitude, lng: cargaSelecionada.ultima_posicao.longitude }
+      : { lat: cargaSelecionada.origem_lat, lng: cargaSelecionada.origem_lng };
+
+    const destino = { lat: cargaSelecionada.destino_lat, lng: cargaSelecionada.destino_lng };
+
+    if (!Number.isFinite(origem.lat) || !Number.isFinite(origem.lng) || !Number.isFinite(destino.lat) || !Number.isFinite(destino.lng)) {
+      return;
+    }
+
+    const requestId = ++routeRequestIdRef.current;
+
+    getMapboxRoute({ from: origem, to: destino, profile: 'driving' })
+      .then((route) => {
+        if (requestId !== routeRequestIdRef.current) return;
+
+        if (!mapRef.current) return;
+
+        if (routeRef.current) {
+          routeRef.current.remove();
+          routeRef.current = null;
+        }
+
+        routeRef.current = L.polyline(route.coordinatesLatLng, {
+          color: '#2563eb',
+          weight: 4,
+          opacity: 0.9
+        }).addTo(mapRef.current);
+
+        mapRef.current.fitBounds(routeRef.current.getBounds(), { padding: [50, 50] });
+      })
+      .catch((error) => {
+        console.error('Erro ao calcular rota Mapbox:', error);
+      });
+  }, [cargaSelecionadaId, cargas, lastUpdate]);
+
   // Atualizar marcadores quando cargas mudarem
   useEffect(() => {
     if (!mapRef.current) return;
@@ -78,7 +132,7 @@ export default function MapaRastreamento({
     });
 
     // Ajustar zoom para mostrar todos os marcadores
-    if (cargas.length > 0) {
+    if (!cargaSelecionadaId && cargas.length > 0) {
       const bounds = L.latLngBounds(
         cargas
           .filter(c => c.ultima_posicao || (c.origem_lat && c.origem_lng))
@@ -91,7 +145,7 @@ export default function MapaRastreamento({
       );
       map.fitBounds(bounds, { padding: [50, 50] });
     }
-  }, [cargas, lastUpdate]);
+  }, [cargas, lastUpdate, cargaSelecionadaId]);
 
   function adicionarMarcador(
     map: L.Map,
@@ -108,9 +162,10 @@ export default function MapaRastreamento({
       .bindPopup(criarPopupContent(carga));
 
     // Adicionar evento de click
-    if (onCargaClick) {
-      marker.on('click', () => onCargaClick(carga));
-    }
+    marker.on('click', () => {
+      setCargaSelecionadaId(carga.id);
+      if (onCargaClick) onCargaClick(carga);
+    });
 
     markersRef.current.set(carga.id, marker);
   }

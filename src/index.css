@@ -46,3 +46,127 @@
 .animate-pulse-slow {
   animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* ========== TRANSIÇÕES SUAVES GLOBAIS ========== */
+
+/* Transição suave para botões, links e elementos interativos */
+button,
+a,
+input,
+select,
+textarea,
+[role="button"],
+.transition-smooth {
+  transition: all 0.3s ease-in-out;
+}
+
+/* Transição mais lenta para mudanças de estado (hover, focus) */
+button:hover,
+a:hover,
+input:focus,
+select:focus,
+textarea:focus {
+  transition: all 0.35s ease-out;
+}
+
+/* Animação de fade-in para conteúdo de abas e modais */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+.animate-fade-in-scale {
+  animation: fadeInScale 0.35s ease-out forwards;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out forwards;
+}
+
+/* Transição suave para checkboxes customizados */
+input[type="checkbox"] {
+  transition: all 0.25s ease-in-out;
+}
+
+input[type="checkbox"]:checked {
+  transition: all 0.2s ease-out;
+}
+
+/* Efeito suave em cards e containers ao hover */
+.hover-lift {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+/* Transição suave para modais */
+.modal-backdrop {
+  transition: opacity 0.35s ease-in-out;
+}
+
+.modal-content {
+  transition: transform 0.4s ease-out, opacity 0.35s ease-out;
+}
+
+/* Transição suave para abas */
+.tab-content {
+  animation: fadeIn 0.4s ease-out;
+}
+
+/* Efeito de destaque suave em inputs ao focus */
+input:focus,
+select:focus,
+textarea:focus {
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Transição suave para badges e status */
+.badge,
+[class*="StatusBadge"] {
+  transition: all 0.25s ease-in-out;
+}
+
+/* Efeito suave em linhas de tabela */
+tr {
+  transition: background-color 0.25s ease;
+}
+
+/* Transição suave para toggle de visualização (lista/mapa) */
+.view-toggle button {
+  transition: all 0.35s ease-in-out;
+}

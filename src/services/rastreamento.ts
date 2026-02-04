@@ -30,7 +30,8 @@ class RastreamentoService {
     this.config = {
       baseUrl: import.meta.env.VITE_RASTREAMENTO_API_URL || '',
       apiKey: import.meta.env.VITE_RASTREAMENTO_API_KEY || '',
-      intervaloAtualizacao: 5 // 5 minutos padrão
+      intervaloAtualizacao: 5, // 5 minutos padrão
+      usarFleetEngine: false
     };
   }
 
@@ -44,7 +45,12 @@ class RastreamentoService {
       const token = this.gerarToken();
       
       // URL base para compartilhamento
-      const baseUrl = `${window.location.origin}/rastreamento`;
+      const publicAppUrl = (import.meta.env.VITE_PUBLIC_APP_URL || '').trim();
+      const origin = publicAppUrl && /^https?:\/\//i.test(publicAppUrl)
+        ? publicAppUrl.replace(/\/+$/, '')
+        : window.location.origin;
+
+      const baseUrl = `${origin}/rastreamento`;
       const linkRastreamento = `${baseUrl}/${token}`;
 
       // Salvar token no banco relacionado à carga
@@ -65,6 +71,29 @@ class RastreamentoService {
       console.error('Erro ao gerar link de rastreamento:', error);
       throw error;
     }
+  }
+
+  gerarMensagemCompartilhamento(linkRastreamento: string): string {
+    return `Olá! �
+      
+Para que possamos rastrear sua carga em tempo real, por favor clique no link abaixo e permita o acesso à sua localização:
+
+${linkRastreamento}
+
+Este link é seguro e será usado apenas para acompanhar a entrega da carga.
+
+Obrigado!
+BratCargas`;
+  }
+
+  gerarUrlWhatsApp(telefone: string, mensagem: string): string {
+    const telefoneFormatado = telefone.replace(/\D/g, '');
+    return `https://wa.me/55${telefoneFormatado}?text=${encodeURIComponent(mensagem)}`;
+  }
+
+  gerarUrlSms(telefone: string, mensagem: string): string {
+    const telefoneFormatado = telefone.replace(/\D/g, '');
+    return `sms:+55${telefoneFormatado}?body=${encodeURIComponent(mensagem)}`;
   }
 
   /**
@@ -233,20 +262,10 @@ class RastreamentoService {
   private async enviarLinkWhatsApp(telefone: string, link: string): Promise<void> {
     try {
       // Formatar mensagem
-      const mensagem = `Olá! 👋
-      
-Para que possamos rastrear sua carga em tempo real, por favor clique no link abaixo e permita o acesso à sua localização:
-
-${link}
-
-Este link é seguro e será usado apenas para acompanhar a entrega da carga.
-
-Obrigado!
-Braticargas`;
+      const mensagem = this.gerarMensagemCompartilhamento(link);
 
       // OPÇÃO 1: Via WhatsApp Web (abre no navegador)
-      const telefoneFormatado = telefone.replace(/\D/g, '');
-      const whatsappUrl = `https://wa.me/55${telefoneFormatado}?text=${encodeURIComponent(mensagem)}`;
+      const whatsappUrl = this.gerarUrlWhatsApp(telefone, mensagem);
       
       console.log('Link WhatsApp gerado:', whatsappUrl);
       
