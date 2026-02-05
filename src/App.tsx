@@ -7,6 +7,7 @@ import Login from './components/Auth/Login';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import EmbarcadorDashboard from './components/Dashboard/EmbarcadorDashboard';
 import CooperativaDashboard from './components/Dashboard/CooperativaDashboard';
+import RastreamentoMotorista from './components/Rastreamento/RastreamentoMotorista';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: unknown }> {
   state = { hasError: false as boolean, error: undefined as unknown };
@@ -61,6 +62,8 @@ function AppContent() {
 
   return (
     <Routes>
+          <Route path="/rastreamento/:token" element={<RastreamentoMotorista />} />
+
           {/* Rota de Login */}
           <Route 
             path="/login" 

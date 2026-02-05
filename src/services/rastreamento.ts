@@ -2,6 +2,7 @@
 
 import { supabase } from './supabase';
 import type { PosicaoGPS } from '../types';
+import { withTimeout } from '../utils/async';
 
 /**
  * Serviço de integração com API de rastreamento GPS
@@ -54,12 +55,16 @@ class RastreamentoService {
       const linkRastreamento = `${baseUrl}/${token}`;
 
       // Salvar token no banco relacionado à carga
-      const { error } = await supabase
-        .from('cargas')
-        .update({ 
-          link_rastreamento: token 
-        })
-        .eq('id', cargaId);
+      const { error } = await withTimeout(
+        supabase
+          .from('cargas')
+          .update({
+            link_rastreamento: token,
+          })
+          .eq('id', cargaId),
+        10000,
+        'Timeout ao salvar link de rastreamento'
+      );
 
       if (error) throw error;
 
@@ -107,7 +112,7 @@ BratCargas`;
       .from('cargas')
       .select('id')
       .eq('link_rastreamento', token)
-      .single();
+      .single<{ id: string }>();
 
     if (error || !carga) {
       throw new Error('Token de rastreamento inválido');
@@ -298,7 +303,7 @@ BratCargas`;
         .eq('carga_id', cargaId)
         .order('timestamp', { ascending: false })
         .limit(1)
-        .single();
+        .single<{ timestamp: string }>();
 
       if (error || !data) return false;
 

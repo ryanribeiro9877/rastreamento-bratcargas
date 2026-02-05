@@ -43,7 +43,8 @@ export function formatarHora(data: string | Date): string {
  * Formata número para exibição de toneladas
  */
 export function formatarToneladas(toneladas: number): string {
-  return `${toneladas.toFixed(2).replace('.', ',')} t`;
+  const valor = Number.isFinite(toneladas) ? toneladas : 0;
+  return `${valor.toFixed(2).replace('.', ',')} t`;
 }
 
 /**

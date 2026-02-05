@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../services/supabase';
 import type { Carga, CargaFormData, FiltrosCargas, MetricasDashboard } from '../types';
 import { calcularDistanciaTotal } from '../utils/calculos';
+import { withTimeout } from '../utils/async';
 
 export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
   const [cargas, setCargas] = useState<Carga[]>([]);
@@ -106,7 +107,7 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
 
       // Buscar última posição para cada carga
       const cargasComPosicao = await Promise.all(
-        (data || []).map(async (carga) => {
+        (data || []).map(async (carga: any) => {
           const { data: posicoes } = await supabase
             .from('posicoes_gps')
             .select('*')
@@ -116,12 +117,13 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
 
           return {
             ...carga,
+            embarcador: carga.embarcador ?? undefined,
             ultima_posicao: posicoes && posicoes.length > 0 ? posicoes[0] : undefined
-          };
+          } as Carga;
         })
       );
 
-      setCargas(cargasComPosicao as Carga[]);
+      setCargas(cargasComPosicao);
     } catch (err) {
       console.error('Erro ao buscar cargas:', err);
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
@@ -168,11 +170,15 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
         ativo: true
       };
 
-      const { data, error } = await supabase
-        .from('cargas')
-        .insert([dadosParaInserir] as any)
-        .select()
-        .single();
+      const { data, error } = await withTimeout(
+        supabase
+          .from('cargas')
+          .insert([dadosParaInserir] as any)
+          .select()
+          .single(),
+        15000,
+        'Timeout ao cadastrar carga'
+      );
 
       if (error) throw error;
       if (!data) throw new Error('Erro ao criar carga: dados não retornados');

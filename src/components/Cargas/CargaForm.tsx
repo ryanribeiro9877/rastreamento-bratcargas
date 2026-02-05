@@ -6,6 +6,7 @@ import { rastreamentoService } from '../../services/rastreamento';
 import { supabase } from '../../services/supabase';
 import { geocodeCidadeUf } from '../../services/mapboxGeocoding';
 import { buscarEnderecoPorCep, formatarCep } from '../../services/viaCep';
+import { withTimeout } from '../../utils/async';
 import type { CargaFormData } from '../../types';
 import { UFS } from '../../utils/formatters';
 
@@ -288,11 +289,31 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
           : `[Tipo de carga: ${tipoCarga}]`
       };
 
-      // Coordenadas padrão (Salvador -> São Paulo)
       dadosParaSalvar.origem_lat = -12.9714;
       dadosParaSalvar.origem_lng = -38.5014;
       dadosParaSalvar.destino_lat = -23.5505;
       dadosParaSalvar.destino_lng = -46.6333;
+
+      try {
+        const [origem, destino] = await Promise.all([
+          withTimeout(
+            geocodeCidadeUf({ cidade: formData.origem_cidade, uf: formData.origem_uf }),
+            8000,
+            'Timeout geocoding origem'
+          ),
+          withTimeout(
+            geocodeCidadeUf({ cidade: formData.destino_cidade, uf: formData.destino_uf }),
+            8000,
+            'Timeout geocoding destino'
+          ),
+        ]);
+        dadosParaSalvar.origem_lat = origem.lat;
+        dadosParaSalvar.origem_lng = origem.lng;
+        dadosParaSalvar.destino_lat = destino.lat;
+        dadosParaSalvar.destino_lng = destino.lng;
+      } catch (geoErr) {
+        console.warn('Geocoding falhou, usando coordenadas padrão:', geoErr);
+      }
 
       // Criar carga
       const carga = await criarCarga(dadosParaSalvar);
@@ -619,7 +640,7 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
                 type="number"
                 step="0.01"
                 value={formData.toneladas || ''}
-                onChange={(e) => handleChange('toneladas', e.target.value ? parseFloat(e.target.value) : 0)}
+                onChange={(e) => { const v = parseFloat(e.target.value); handleChange('toneladas', Number.isFinite(v) ? v : 0); }}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Ex: 25.5"
                 required
