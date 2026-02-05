@@ -216,28 +216,24 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    console.log('[CARGA] handleSubmit INICIO');
     
     try {
       setLoading(true);
       setError('');
 
-      // Validações básicas
       if (!formData.nota_fiscal || !formData.origem_cidade || !formData.destino_cidade) {
         throw new Error('Preencha todos os campos obrigatórios');
       }
-
       if (!formData.origem_uf || !formData.destino_uf) {
         throw new Error('Selecione o estado de saída e o estado de destino');
       }
-
       if (!formData.data_carregamento) {
         throw new Error('Selecione a data de saída');
       }
-
       if (!formData.prazo_entrega) {
         throw new Error('Selecione a estimativa de entrega');
       }
-
       if (!embarcadorId && !formData.embarcador_id) {
         throw new Error('Selecione o nome da empresa');
       }
@@ -246,7 +242,6 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
         if (!validarCelular(telefone1Numero)) {
           throw new Error('Telefone inválido: informe 9 dígitos e o primeiro deve ser 9');
         }
-
         if (!telefone1EhWhatsapp) {
           if (!telefoneWhatsappDdd || !telefoneWhatsappNumero) {
             throw new Error('Informe um telefone com WhatsApp');
@@ -268,6 +263,8 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
         }
       }
 
+      console.log('[CARGA] Validações OK');
+
       const telefoneParaContato = telefone1Ddd && telefone1Numero
         ? montarTelefoneBr(telefone1Ddd, telefone1Numero)
         : '';
@@ -278,73 +275,79 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
           : montarTelefoneBr(telefoneWhatsappDdd, telefoneWhatsappNumero))
         : '';
 
-      const dadosParaSalvar: CargaFormData = {
-        ...formData,
-        motorista_telefone: telefoneParaWhatsapp || telefoneParaContato || undefined,
-        descricao: formData.descricao
-          ? `[Tipo de carga: ${tipoCarga}] ${formData.descricao}`
-          : `[Tipo de carga: ${tipoCarga}]`
-      };
-
-      dadosParaSalvar.origem_lat = -12.9714;
-      dadosParaSalvar.origem_lng = -38.5014;
-      dadosParaSalvar.destino_lat = -23.5505;
-      dadosParaSalvar.destino_lng = -46.6333;
-
-      const distanciaTotal = calcularDistanciaTotal(
-        dadosParaSalvar.origem_lat || 0,
-        dadosParaSalvar.origem_lng || 0,
-        dadosParaSalvar.destino_lat || 0,
-        dadosParaSalvar.destino_lng || 0
-      );
+      console.log('[CARGA] embarcador_id:', formData.embarcador_id || embarcadorId);
 
       const dadosParaInserir = {
-        embarcador_id: dadosParaSalvar.embarcador_id,
-        nota_fiscal: dadosParaSalvar.nota_fiscal,
-        origem_cidade: dadosParaSalvar.origem_cidade,
-        origem_uf: dadosParaSalvar.origem_uf,
-        origem_bairro: dadosParaSalvar.origem_bairro || null,
-        origem_lat: dadosParaSalvar.origem_lat || null,
-        origem_lng: dadosParaSalvar.origem_lng || null,
-        destino_cidade: dadosParaSalvar.destino_cidade,
-        destino_uf: dadosParaSalvar.destino_uf,
-        destino_bairro: dadosParaSalvar.destino_bairro || null,
-        destino_lat: dadosParaSalvar.destino_lat || null,
-        destino_lng: dadosParaSalvar.destino_lng || null,
-        toneladas: dadosParaSalvar.toneladas || 0,
-        descricao: dadosParaSalvar.descricao || null,
-        data_carregamento: dadosParaSalvar.data_carregamento,
-        prazo_entrega: dadosParaSalvar.prazo_entrega,
-        motorista_nome: dadosParaSalvar.motorista_nome || null,
-        motorista_telefone: dadosParaSalvar.motorista_telefone || null,
-        placa_veiculo: dadosParaSalvar.placa_veiculo || null,
-        distancia_total_km: distanciaTotal,
-        status: 'em_transito',
+        embarcador_id: formData.embarcador_id || embarcadorId,
+        nota_fiscal: formData.nota_fiscal,
+        origem_cidade: formData.origem_cidade,
+        origem_uf: formData.origem_uf,
+        origem_bairro: formData.origem_bairro || null,
+        origem_lat: -12.9714,
+        origem_lng: -38.5014,
+        destino_cidade: formData.destino_cidade,
+        destino_uf: formData.destino_uf,
+        destino_bairro: formData.destino_bairro || null,
+        destino_lat: -23.5505,
+        destino_lng: -46.6333,
+        toneladas: formData.toneladas || 0,
+        descricao: formData.descricao
+          ? `[Tipo de carga: ${tipoCarga}] ${formData.descricao}`
+          : `[Tipo de carga: ${tipoCarga}]`,
+        data_carregamento: formData.data_carregamento,
+        prazo_entrega: formData.prazo_entrega,
+        motorista_nome: formData.motorista_nome || null,
+        motorista_telefone: (telefoneParaWhatsapp || telefoneParaContato) || null,
+        placa_veiculo: formData.placa_veiculo || null,
+        distancia_total_km: calcularDistanciaTotal(-12.9714, -38.5014, -23.5505, -46.6333),
+        status: 'em_transito' as const,
         status_prazo: 'no_prazo',
-        velocidade_media_estimada: dadosParaSalvar.velocidade_media_estimada || 60,
+        velocidade_media_estimada: formData.velocidade_media_estimada || 60,
         ativo: true
       };
 
-      const { error: insertError } = await supabase
-        .from('cargas')
-        .insert(dadosParaInserir);
+      console.log('[CARGA] Antes do insert via fetch');
 
-      if (insertError) throw insertError;
+      const session = (await supabase.auth.getSession()).data.session;
+      if (!session) throw new Error('Usuário não autenticado');
 
-      const { data: cargaRows, error: fetchError } = await supabase
-        .from('cargas')
-        .select('*')
-        .eq('nota_fiscal', dadosParaInserir.nota_fiscal)
-        .limit(1)
-        .single();
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-      if (fetchError) throw fetchError;
-      if (!cargaRows) throw new Error('Erro ao criar carga: dados não retornados');
+      const insertResponse = await fetch(`${supabaseUrl}/rest/v1/cargas`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${session.access_token}`,
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(dadosParaInserir)
+      });
 
-      const carga = cargaRows as unknown as Carga;
+      console.log('[CARGA] Insert response status:', insertResponse.status);
 
-      supabase.from('historico_status').insert({
-        carga_id: carga.id, status_novo: 'em_transito', observacao: 'Carga criada'
+      if (!insertResponse.ok) {
+        const errBody = await insertResponse.text();
+        console.error('[CARGA] Insert error body:', errBody);
+        throw new Error(`Erro ao cadastrar carga: ${insertResponse.status} - ${errBody}`);
+      }
+
+      const insertedRows = await insertResponse.json();
+      const carga = (Array.isArray(insertedRows) ? insertedRows[0] : insertedRows) as Carga;
+
+      console.log('[CARGA] Carga criada:', carga.id);
+
+      fetch(`${supabaseUrl}/rest/v1/historico_status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          carga_id: carga.id, status_novo: 'em_transito', observacao: 'Carga criada'
+        })
       });
 
       // Se tem telefone do motorista, gerar link de rastreamento

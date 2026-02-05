@@ -37,6 +37,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
         }
+        Relationships: []
       }
       usuarios_embarcadores: {
         Row: {
@@ -66,6 +67,7 @@ export interface Database {
           ativo?: boolean
           created_at?: string
         }
+        Relationships: []
       }
       cargas: {
         Row: {
@@ -74,10 +76,12 @@ export interface Database {
           nota_fiscal: string
           origem_cidade: string
           origem_uf: string
+          origem_bairro: string | null
           origem_lat: number | null
           origem_lng: number | null
           destino_cidade: string
           destino_uf: string
+          destino_bairro: string | null
           destino_lat: number | null
           destino_lng: number | null
           toneladas: number
@@ -103,10 +107,12 @@ export interface Database {
           nota_fiscal: string
           origem_cidade: string
           origem_uf: string
+          origem_bairro?: string | null
           origem_lat?: number | null
           origem_lng?: number | null
           destino_cidade: string
           destino_uf: string
+          destino_bairro?: string | null
           destino_lat?: number | null
           destino_lng?: number | null
           toneladas: number
@@ -132,10 +138,12 @@ export interface Database {
           nota_fiscal?: string
           origem_cidade?: string
           origem_uf?: string
+          origem_bairro?: string | null
           origem_lat?: number | null
           origem_lng?: number | null
           destino_cidade?: string
           destino_uf?: string
+          destino_bairro?: string | null
           destino_lat?: number | null
           destino_lng?: number | null
           toneladas?: number
@@ -155,6 +163,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
         }
+        Relationships: []
       }
       posicoes_gps: {
         Row: {
@@ -187,6 +196,7 @@ export interface Database {
           precisao_metros?: number | null
           origem?: string
         }
+        Relationships: []
       }
       alertas: {
         Row: {
@@ -222,6 +232,7 @@ export interface Database {
           enviado_em?: string | null
           created_at?: string
         }
+        Relationships: []
       }
       historico_status: {
         Row: {
@@ -248,7 +259,20 @@ export interface Database {
           observacao?: string | null
           created_at?: string
         }
+        Relationships: []
       }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
     }
   }
 }
