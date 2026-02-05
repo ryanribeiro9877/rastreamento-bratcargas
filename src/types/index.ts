@@ -1,7 +1,7 @@
-// types/index.ts - Tipos TypeScript do Sistema de Rastreamento Braticargas
+// types/index.ts - Tipos TypeScript do Sistema de Rastreamento BratCargas
 
-export type StatusCarga = 'em_transito' | 'entregue' | 'cancelada';
-export type StatusPrazo = 'no_prazo' | 'atrasado' | 'adiantado';
+export type StatusCarga = 'em_transito' | 'entregue' | 'cancelada' | 'aguardando_data';
+export type StatusPrazo = 'no_prazo' | 'atrasado' | 'adiantado' | 'aguardando_data';
 export type TipoAlerta = 'entrega' | 'atraso' | 'adiantamento';
 export type DestinatarioAlerta = 'embarcador' | 'cooperativa';
 
@@ -36,12 +36,14 @@ export interface Carga {
   // Origem
   origem_cidade: string;
   origem_uf: string;
+  origem_bairro?: string;
   origem_lat: number;
   origem_lng: number;
   
   // Destino
   destino_cidade: string;
   destino_uf: string;
+  destino_bairro?: string;
   destino_lat: number;
   destino_lng: number;
   
@@ -116,13 +118,23 @@ export interface CargaFormData {
   nota_fiscal: string;
   embarcador_id: string;
   
+  origem_cep?: string;
   origem_cidade: string;
   origem_uf: string;
+  origem_bairro?: string;
+  origem_logradouro?: string;
+  origem_numero?: string;
+  origem_sem_numero?: boolean;
   origem_lat?: number;
   origem_lng?: number;
   
+  destino_cep?: string;
   destino_cidade: string;
   destino_uf: string;
+  destino_bairro?: string;
+  destino_logradouro?: string;
+  destino_numero?: string;
+  destino_sem_numero?: boolean;
   destino_lat?: number;
   destino_lng?: number;
   

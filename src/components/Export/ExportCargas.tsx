@@ -139,7 +139,7 @@ export default function ExportCargas({ cargas, nomeArquivo = 'cargas' }: ExportC
         </style>
       </head>
       <body>
-        <h1>Braticargas - Relatório de Cargas</h1>
+        <h1>BratCargas - Relatório de Cargas</h1>
         <p><strong>Data:</strong> ${formatarDataHora(new Date().toISOString())}</p>
         <p><strong>Total de Cargas:</strong> ${cargas.length}</p>
         

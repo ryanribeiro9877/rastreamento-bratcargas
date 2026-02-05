@@ -70,17 +70,17 @@ export default function DashboardMetrics({ metricas }: DashboardMetricsProps) {
     switch (cor) {
       case 'blue':
         return {
-          bg: 'bg-blue-50',
-          iconBg: 'bg-blue-100',
-          iconText: 'text-blue-600',
-          text: 'text-blue-900'
+          bg: 'bg-[#009440]/10',
+          iconBg: 'bg-[#009440]/20',
+          iconText: 'text-[#009440]',
+          text: 'text-[#009440]'
         };
       case 'green':
         return {
-          bg: 'bg-green-50',
-          iconBg: 'bg-green-100',
-          iconText: 'text-green-600',
-          text: 'text-green-900'
+          bg: 'bg-emerald-50',
+          iconBg: 'bg-emerald-100',
+          iconText: 'text-emerald-600',
+          text: 'text-emerald-800'
         };
       case 'red':
         return {
@@ -91,10 +91,10 @@ export default function DashboardMetrics({ metricas }: DashboardMetricsProps) {
         };
       case 'yellow':
         return {
-          bg: 'bg-yellow-50',
-          iconBg: 'bg-yellow-100',
-          iconText: 'text-yellow-600',
-          text: 'text-yellow-900'
+          bg: 'bg-[#e6e651]/20',
+          iconBg: 'bg-[#e6e651]/30',
+          iconText: 'text-[#061735]',
+          text: 'text-[#061735]'
         };
       default:
         return {
@@ -128,7 +128,7 @@ export default function DashboardMetrics({ metricas }: DashboardMetricsProps) {
               {card.valor}
             </div>
             
-            <div className="text-sm font-medium text-gray-600 mb-1">
+            <div className="text-sm font-medium mb-1 text-gray-600">
               {card.titulo}
             </div>
             

@@ -133,7 +133,7 @@ export default function RastreamentoMotorista() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold">Rastreamento de Carga</h1>
-                <p className="text-blue-100">Braticargas</p>
+                <p className="text-blue-100">BratCargas</p>
               </div>
             </div>
           </div>
@@ -262,7 +262,7 @@ export default function RastreamentoMotorista() {
 
         {/* Footer */}
         <div className="text-center text-white text-sm">
-          <p>© 2025 Braticargas - Todos os direitos reservados</p>
+          <p>© 2025 BratCargas - Todos os direitos reservados</p>
           <p className="mt-1 opacity-75">Sistema de Rastreamento de Cargas</p>
         </div>
       </div>

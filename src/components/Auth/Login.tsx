@@ -60,19 +60,25 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#009440] to-[#061735] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-8 text-white">
-          <div className="flex items-center justify-center mb-4">
-            <div className="bg-white p-3 rounded-full">
-              <svg className="w-12 h-12 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
+        <div className="bg-[#061735] p-8 text-white">
+          <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@1,900&display=swap" rel="stylesheet" />
+          <div className="flex flex-col items-center justify-center">
+            <img 
+              src="https://eytxgejxpsuotnbmvxao.supabase.co/storage/v1/object/public/assets/logotitulo.png" 
+              alt="BratCargas Logo" 
+              className="h-32 object-contain"
+            />
+            <h1 
+              className="text-3xl text-white mt-2 tracking-wide"
+              style={{ fontFamily: "'Inter', sans-serif", fontWeight: 900, fontStyle: 'italic' }}
+            >
+              BRATCargas
+            </h1>
+            <p className="text-center text-gray-300 mt-1">Sistema de Rastreamento</p>
           </div>
-          <h1 className="text-3xl font-bold text-center">Braticargas</h1>
-          <p className="text-center text-blue-100 mt-2">Sistema de Rastreamento de Cargas</p>
         </div>
 
         {/* Form */}
@@ -101,7 +107,7 @@ export default function Login() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#009440] focus:border-transparent outline-none transition"
                   placeholder="••••••••"
                   disabled={loading}
                 />
@@ -116,7 +122,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-[#009440] hover:bg-[#007a35] text-white font-semibold py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <span className="flex items-center justify-center">
@@ -135,7 +141,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => setShowResetPassword(true)}
-                  className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
+                  className="text-sm text-[#009440] hover:text-[#007a35] hover:underline"
                 >
                   Esqueci minha senha
                 </button>
@@ -158,7 +164,7 @@ export default function Login() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#009440] focus:border-transparent outline-none transition"
                   placeholder="seu@email.com"
                   disabled={loading}
                 />
@@ -174,7 +180,7 @@ export default function Login() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-200"
+                  className="w-full bg-[#009440] hover:bg-[#007a35] text-white font-semibold py-3 px-4 rounded-lg transition duration-200"
                 >
                   {loading ? 'Enviando...' : 'Enviar Link de Recuperação'}
                 </button>
@@ -197,7 +203,7 @@ export default function Login() {
         {/* Footer */}
         <div className="bg-gray-50 px-8 py-4 border-t border-gray-200">
           <p className="text-center text-xs text-gray-500">
-            © 2025 Braticargas. Todos os direitos reservados.
+            © 2025 BratCargas. Todos os direitos reservados.
           </p>
         </div>
       </div>

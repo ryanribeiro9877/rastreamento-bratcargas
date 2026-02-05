@@ -40,6 +40,8 @@ export default function CargaStatus({
         return 'text-red-600';
       case 'adiantado':
         return 'text-blue-600';
+      case 'aguardando_data':
+        return 'text-orange-600';
       default:
         return 'text-gray-600';
     }
@@ -53,6 +55,8 @@ export default function CargaStatus({
         return 'bg-red-100';
       case 'adiantado':
         return 'bg-blue-100';
+      case 'aguardando_data':
+        return 'bg-orange-100';
       default:
         return 'bg-gray-100';
     }
@@ -98,6 +102,7 @@ export default function CargaStatus({
         <div className={`absolute -top-1 -right-1 ${sizeClasses[size]} rounded-full border-2 border-white ${
           statusPrazo === 'no_prazo' ? 'bg-green-500' :
           statusPrazo === 'atrasado' ? 'bg-red-500' :
+          statusPrazo === 'aguardando_data' ? 'bg-orange-500' :
           'bg-blue-500'
         }`} />
       </div>
@@ -141,6 +146,7 @@ export function StatusBadge({
       <span className={`w-2 h-2 rounded-full mr-2 ${
         statusPrazo === 'no_prazo' ? 'bg-green-500' :
         statusPrazo === 'atrasado' ? 'bg-red-500' :
+        statusPrazo === 'aguardando_data' ? 'bg-orange-500' :
         'bg-blue-500'
       }`} />
       {label}

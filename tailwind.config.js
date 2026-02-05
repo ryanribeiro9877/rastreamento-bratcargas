@@ -7,17 +7,23 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Cores padrão BratCargas
+        brat: {
+          green: '#009440',
+          navy: '#061735',
+          yellow: '#e6e651',
+        },
         primary: {
-          50: '#eff6ff',
-          100: '#dbeafe',
-          200: '#bfdbfe',
-          300: '#93c5fd',
-          400: '#60a5fa',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-          800: '#1e40af',
-          900: '#1e3a8a',
+          50: '#e6f7ed',
+          100: '#ccefdb',
+          200: '#99dfb7',
+          300: '#66cf93',
+          400: '#33bf6f',
+          500: '#009440',
+          600: '#007a35',
+          700: '#00612a',
+          800: '#00471f',
+          900: '#002e14',
         },
       },
       animation: {

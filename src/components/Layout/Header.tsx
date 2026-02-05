@@ -30,7 +30,7 @@ export default function Header() {
               </svg>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Braticargas</h1>
+              <h1 className="text-xl font-bold text-gray-900">BratCargas</h1>
               <p className="text-xs text-gray-500">Rastreamento de Cargas</p>
             </div>
           </div>

@@ -199,7 +199,7 @@ Detalhes da Entrega:
 - Placa: ${carga.placa_veiculo || 'Não informado'}
 
 Atenciosamente,
-Braticargas`;
+BratCargas`;
   }
 
   /**
@@ -231,7 +231,7 @@ Prazo Original: ${new Date(carga.prazo_entrega).toLocaleString('pt-BR')}
 Continue acompanhando em tempo real pelo sistema.
 
 Atenciosamente,
-Braticargas`;
+BratCargas`;
   }
 
   /**
@@ -284,10 +284,10 @@ Braticargas`;
         </div>
       </div>
       
-      <p>Obrigado por confiar na Braticargas!</p>
+      <p>Obrigado por confiar na BratCargas!</p>
     </div>
     <div class="footer">
-      <p>Braticargas - Cooperativa de Transporte</p>
+      <p>BratCargas - Cooperativa de Transporte</p>
       <p>Este é um email automático, não responda.</p>
     </div>
   </div>
@@ -321,7 +321,7 @@ Braticargas`;
       <h1>⚠️ ALERTA: Carga em Atraso</h1>
     </div>
     <div class="content">
-      <p><strong>Atenção Equipe Braticargas!</strong></p>
+      <p><strong>Atenção Equipe BratCargas!</strong></p>
       <p>A carga abaixo está com possível atraso na entrega:</p>
       
       <div class="alert-box">

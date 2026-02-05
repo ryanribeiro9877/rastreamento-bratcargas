@@ -140,33 +140,54 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
         dados.destino_lng || 0
       );
 
+      // Filtrar apenas os campos válidos para a tabela cargas
+      const dadosParaInserir = {
+        embarcador_id: dados.embarcador_id,
+        nota_fiscal: dados.nota_fiscal,
+        origem_cidade: dados.origem_cidade,
+        origem_uf: dados.origem_uf,
+        origem_bairro: dados.origem_bairro || null,
+        origem_lat: dados.origem_lat || null,
+        origem_lng: dados.origem_lng || null,
+        destino_cidade: dados.destino_cidade,
+        destino_uf: dados.destino_uf,
+        destino_bairro: dados.destino_bairro || null,
+        destino_lat: dados.destino_lat || null,
+        destino_lng: dados.destino_lng || null,
+        toneladas: dados.toneladas || 0,
+        descricao: dados.descricao || null,
+        data_carregamento: dados.data_carregamento,
+        prazo_entrega: dados.prazo_entrega,
+        motorista_nome: dados.motorista_nome || null,
+        motorista_telefone: dados.motorista_telefone || null,
+        placa_veiculo: dados.placa_veiculo || null,
+        distancia_total_km: distanciaTotal,
+        status: 'em_transito',
+        status_prazo: 'no_prazo',
+        velocidade_media_estimada: dados.velocidade_media_estimada || 60,
+        ativo: true
+      };
+
       const { data, error } = await supabase
         .from('cargas')
-        .insert([
-          {
-            ...dados,
-            distancia_total_km: distanciaTotal,
-            status: 'em_transito',
-            status_prazo: 'no_prazo',
-            velocidade_media_estimada: dados.velocidade_media_estimada || 60
-          }
-        ])
+        .insert([dadosParaInserir] as any)
         .select()
         .single();
 
       if (error) throw error;
+      if (!data) throw new Error('Erro ao criar carga: dados não retornados');
 
       // Registrar no histórico
       await supabase.from('historico_status').insert([
         {
-          carga_id: data.id,
+          carga_id: (data as any).id,
           status_novo: 'em_transito',
           observacao: 'Carga criada'
         }
-      ]);
+      ] as any);
 
       await fetchCargas();
-      return data;
+      return data as Carga;
     } catch (err) {
       console.error('Erro ao criar carga:', err);
       throw err;
@@ -252,6 +273,32 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
     }
   }
 
+  async function excluirCarga(id: string): Promise<void> {
+    try {
+      // Soft delete: marca como inativo em vez de deletar fisicamente
+      const { error } = await supabase
+        .from('cargas')
+        .update({ ativo: false })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      // Registrar no histórico
+      await supabase.from('historico_status').insert([
+        {
+          carga_id: id,
+          status_novo: 'excluida',
+          observacao: 'Carga excluída do sistema'
+        }
+      ]);
+
+      await fetchCargas();
+    } catch (err) {
+      console.error('Erro ao excluir carga:', err);
+      throw err;
+    }
+  }
+
   async function dispararAlertaEntrega(cargaId: string): Promise<void> {
     try {
       const carga = cargas.find((c) => c.id === cargaId);
@@ -279,21 +326,23 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
     criarCarga,
     atualizarCarga,
     marcarComoEntregue,
-    cancelarCarga
+    cancelarCarga,
+    excluirCarga
   };
 }
 
 // Hook para métricas do dashboard
-export function useMetricasDashboard(embarcadorId?: string): {
+export function useMetricasDashboard(embarcadorId?: string, refreshKey?: number): {
   metricas: MetricasDashboard | null;
   loading: boolean;
+  refetch: () => void;
 } {
   const [metricas, setMetricas] = useState<MetricasDashboard | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchMetricas();
-  }, [embarcadorId]);
+  }, [embarcadorId, refreshKey]);
 
   async function fetchMetricas() {
     try {
@@ -344,5 +393,5 @@ export function useMetricasDashboard(embarcadorId?: string): {
     }
   }
 
-  return { metricas, loading };
+  return { metricas, loading, refetch: fetchMetricas };
 }

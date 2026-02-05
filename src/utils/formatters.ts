@@ -139,6 +139,13 @@ export function getCorStatusPrazo(status: StatusPrazo): {
         border: 'border-blue-200',
         badge: 'bg-blue-100 text-blue-800'
       };
+    case 'aguardando_data':
+      return {
+        bg: 'bg-orange-50',
+        text: 'text-orange-700',
+        border: 'border-orange-200',
+        badge: 'bg-orange-100 text-orange-800'
+      };
   }
 }
 
@@ -153,6 +160,8 @@ export function getLabelStatusPrazo(status: StatusPrazo): string {
       return 'Atrasado';
     case 'adiantado':
       return 'Adiantado';
+    case 'aguardando_data':
+      return 'Aguardando Data';
   }
 }
 
@@ -183,6 +192,12 @@ export function getCorStatusCarga(status: StatusCarga): {
         text: 'text-gray-700',
         badge: 'bg-gray-100 text-gray-800'
       };
+    case 'aguardando_data':
+      return {
+        bg: 'bg-orange-50',
+        text: 'text-orange-700',
+        badge: 'bg-orange-100 text-orange-800'
+      };
   }
 }
 
@@ -197,6 +212,8 @@ export function getLabelStatusCarga(status: StatusCarga): string {
       return 'Entregue';
     case 'cancelada':
       return 'Cancelada';
+    case 'aguardando_data':
+      return 'Aguardando Data';
   }
 }
 

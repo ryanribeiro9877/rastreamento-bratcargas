@@ -1,6 +1,6 @@
-// hooks/useAuth.ts - Hook de Autenticação
+// hooks/useAuth.ts - Hook de Autenticação com Context
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase, getUserProfile } from '../services/supabase';
 import type { UsuarioEmbarcador } from '../types';
@@ -13,7 +13,17 @@ interface AuthState {
   isEmbarcador: boolean;
 }
 
-export function useAuth() {
+interface AuthContextType extends AuthState {
+  signIn: (email: string, password: string) => Promise<any>;
+  signUp: (email: string, password: string, nome: string) => Promise<any>;
+  signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextType | null>(null);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
     profile: null,
@@ -24,10 +34,20 @@ export function useAuth() {
 
   useEffect(() => {
     let isMounted = true;
+    let initialSessionHandled = false;
+
+    // Timeout de segurança: se após 5s ainda estiver loading, força parar
+    const safetyTimeout = setTimeout(() => {
+      if (isMounted) {
+        console.warn('Timeout de segurança: forçando fim do loading');
+        setAuthState(prev => prev.loading ? { ...prev, loading: false } : prev);
+      }
+    }, 5000);
 
     // Verificar sessão atual
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (!isMounted) return;
+      initialSessionHandled = true;
       
       if (error) {
         console.error('Erro ao obter sessão:', error);
@@ -54,6 +74,7 @@ export function useAuth() {
       }
     }).catch((err) => {
       console.error('Erro crítico ao obter sessão:', err);
+      initialSessionHandled = true;
       if (isMounted) {
         setAuthState({
           user: null,
@@ -65,10 +86,16 @@ export function useAuth() {
       }
     });
 
-    // Escutar mudanças de autenticação
+    // Escutar mudanças de autenticação (ignora evento inicial pois getSession já trata)
     const {
       data: { subscription }
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Ignorar o evento INITIAL_SESSION pois getSession já cuida disso
+      if (event === 'INITIAL_SESSION') return;
+      
+      // Aguardar getSession terminar antes de processar outros eventos
+      if (!initialSessionHandled) return;
+
       if (session?.user) {
         await loadUserProfile(session.user);
       } else {
@@ -84,6 +111,7 @@ export function useAuth() {
 
     return () => {
       isMounted = false;
+      clearTimeout(safetyTimeout);
       subscription.unsubscribe();
     };
   }, []);
@@ -177,7 +205,7 @@ export function useAuth() {
     if (error) throw error;
   }
 
-  return {
+  const value: AuthContextType = {
     ...authState,
     signIn,
     signUp,
@@ -185,4 +213,18 @@ export function useAuth() {
     resetPassword,
     updatePassword
   };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth(): AuthContextType {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth deve ser usado dentro de um AuthProvider');
+  }
+  return context;
 }

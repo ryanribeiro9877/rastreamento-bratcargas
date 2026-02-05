@@ -1,6 +1,7 @@
 // components/Dashboard/CooperativaDashboard.tsx - Dashboard da Cooperativa (COMPLETO)
 
 import { useState } from 'react';
+import { useAuth } from '../../hooks/useAuth';
 import { useCargas, useMetricasDashboard } from '../../hooks/useCargas';
 import { useRealtimeCargas } from '../../hooks/useRealtime';
 import DashboardMetrics from './DashboardMetrics';
@@ -8,6 +9,10 @@ import FiltrosCargas from '../Filtros/FiltrosCargas';
 import MapaRastreamento from '../Mapa/MapaRastreamento';
 import CargaStatus, { StatusBadge } from '../Cargas/CargaStatus';
 import CargaForm from '../Cargas/CargaForm';
+import EmpresaForm from '../Empresas/EmpresaForm';
+import CargasModal from '../Cooperativa/CargasModal';
+import EmpresasModal from '../Cooperativa/EmpresasModal';
+import ConfiguracoesModal from '../Usuario/ConfiguracoesModal';
 import type { FiltrosCargas as FiltrosCargasType, Carga } from '../../types';
 import { 
   formatarDataHora, 
@@ -18,6 +23,7 @@ import {
 import { calcularProgressoEntrega } from '../../utils/calculos';
 
 export default function CooperativaDashboard() {
+  const { signOut } = useAuth();
   const [filtros, setFiltros] = useState<FiltrosCargasType>({
     // Padrão: mostrar apenas cargas em trânsito
     status: ['em_transito']
@@ -25,10 +31,17 @@ export default function CooperativaDashboard() {
   const [cargaSelecionada, setCargaSelecionada] = useState<Carga | null>(null);
   const [viewMode, setViewMode] = useState<'lista' | 'mapa'>('mapa');
   const [showCadastro, setShowCadastro] = useState(false);
+  const [showCadastroEmpresa, setShowCadastroEmpresa] = useState(false);
   const [showHistorico, setShowHistorico] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showCargas, setShowCargas] = useState(false);
+  const [showEmpresas, setShowEmpresas] = useState(false);
+  const [showConfiguracoes, setShowConfiguracoes] = useState(false);
+  const isDark = false; // Tema fixo claro
+  const tema = 'claro' as const; // Tema fixo claro
 
-  const { cargas, loading, refetch, marcarComoEntregue } = useCargas(undefined, filtros);
-  const { metricas, loading: loadingMetricas } = useMetricasDashboard();
+  const { cargas, loading, refetch, marcarComoEntregue, excluirCarga } = useCargas(undefined, filtros);
+  const { metricas, loading: loadingMetricas, refetch: refetchMetricas } = useMetricasDashboard();
 
   // Realtime - atualizar quando qualquer carga mudar
   useRealtimeCargas(undefined, () => {
@@ -44,6 +57,19 @@ export default function CooperativaDashboard() {
       setCargaSelecionada(null);
     } catch (error) {
       alert('Erro ao marcar carga como entregue');
+    }
+  }
+
+  async function handleExcluirCarga(cargaId: string) {
+    if (!confirm('Tem certeza que deseja excluir esta carga? Esta ação não pode ser desfeita.')) return;
+    
+    try {
+      await excluirCarga(cargaId);
+      refetchMetricas(); // Atualizar métricas após exclusão
+      alert('Carga excluída com sucesso!');
+      setCargaSelecionada(null);
+    } catch (error) {
+      alert('Erro ao excluir carga');
     }
   }
 
@@ -76,13 +102,93 @@ export default function CooperativaDashboard() {
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Braticargas - Central de Operações
-          </h1>
-          <p className="text-gray-600">
-            Monitoramento em tempo real de todas as cargas
-          </p>
+        <div className="flex items-center gap-4">
+          {/* Menu de Usuário */}
+          <div className="relative">
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className={`p-2 rounded-lg transition ${tema === 'escuro' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+            >
+              <svg className={`w-6 h-6 ${tema === 'escuro' ? 'text-gray-300' : 'text-gray-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+
+            {showMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+                <div className={`absolute left-0 mt-2 w-64 rounded-lg shadow-lg z-50 py-2 ${tema === 'escuro' ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
+                  <div className={`px-4 py-3 border-b ${tema === 'escuro' ? 'border-gray-700' : 'border-gray-100'}`}>
+                    <p className={`text-sm font-medium ${tema === 'escuro' ? 'text-white' : 'text-gray-900'}`}>Cooperativa</p>
+                    <p className={`text-xs ${tema === 'escuro' ? 'text-gray-400' : 'text-gray-500'}`}>BratCargas</p>
+                  </div>
+
+                  <div className="py-1">
+                    <button
+                      onClick={() => {
+                        setShowMenu(false);
+                        setShowCargas(true);
+                      }}
+                      className={`w-full flex items-center gap-3 px-4 py-3 text-sm transition ${tema === 'escuro' ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                    >
+                      <svg className={`w-5 h-5 ${tema === 'escuro' ? 'text-gray-400' : 'text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                      Cargas
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowMenu(false);
+                        setShowEmpresas(true);
+                      }}
+                      className={`w-full flex items-center gap-3 px-4 py-3 text-sm transition ${tema === 'escuro' ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                    >
+                      <svg className={`w-5 h-5 ${tema === 'escuro' ? 'text-gray-400' : 'text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                      Empresas
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowMenu(false);
+                        setShowConfiguracoes(true);
+                      }}
+                      className={`w-full flex items-center gap-3 px-4 py-3 text-sm transition ${tema === 'escuro' ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                    >
+                      <svg className={`w-5 h-5 ${tema === 'escuro' ? 'text-gray-400' : 'text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      Configurações
+                    </button>
+
+                    <div className="border-t my-1 border-gray-100" />
+                    <button
+                      onClick={() => {
+                        setShowMenu(false);
+                        signOut();
+                      }}
+                      className={`w-full flex items-center gap-3 px-4 py-3 text-sm transition ${tema === 'escuro' ? 'text-red-400 hover:bg-gray-700' : 'text-red-600 hover:bg-red-50'}`}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                      Sair
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div>
+            <h1 className={`text-3xl font-bold mb-2 ${tema === 'escuro' ? 'text-white' : 'text-gray-900'}`}>
+              BratCargas - Central de Operações
+            </h1>
+            <p className={tema === 'escuro' ? 'text-gray-400' : 'text-gray-600'}>
+              Monitoramento em tempo real de todas as cargas
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
@@ -101,8 +207,18 @@ export default function CooperativaDashboard() {
           </button>
 
           <button
+            onClick={() => setShowCadastroEmpresa(true)}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-green-600 text-white rounded-lg shadow-sm hover:bg-green-700 transition"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+            Nova Empresa
+          </button>
+
+          <button
             onClick={() => setShowCadastro(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 transition"
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg shadow-sm transition ${tema === 'escuro' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-amber-500 text-white hover:bg-amber-600'}`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -143,7 +259,7 @@ export default function CooperativaDashboard() {
               onClick={() => setViewMode('lista')}
               className={`px-4 py-2 rounded-md text-sm font-medium transition ${
                 viewMode === 'lista'
-                  ? 'bg-blue-600 text-white'
+                  ? (tema === 'escuro' ? 'bg-blue-600 text-white' : 'bg-green-700 text-white')
                   : 'text-gray-700 hover:bg-gray-100'
               }`}
             >
@@ -158,7 +274,7 @@ export default function CooperativaDashboard() {
               onClick={() => setViewMode('mapa')}
               className={`px-4 py-2 rounded-md text-sm font-medium transition ${
                 viewMode === 'mapa'
-                  ? 'bg-blue-600 text-white'
+                  ? (tema === 'escuro' ? 'bg-blue-600 text-white' : 'bg-green-700 text-white')
                   : 'text-gray-700 hover:bg-gray-100'
               }`}
             >
@@ -299,11 +415,18 @@ export default function CooperativaDashboard() {
                           {carga.status === 'em_transito' && (
                             <button
                               onClick={() => handleMarcarEntregue(carga.id)}
-                              className="text-green-600 hover:text-green-900"
+                              className="text-green-600 hover:text-green-900 mr-3"
                             >
-                              Marcar Entregue
+                              Entregue
                             </button>
                           )}
+                          <button
+                            onClick={() => handleExcluirCarga(carga.id)}
+                            className="text-red-600 hover:text-red-900"
+                            title="Excluir carga"
+                          >
+                            Excluir
+                          </button>
                         </td>
                       </tr>
                     );
@@ -324,7 +447,7 @@ export default function CooperativaDashboard() {
         </div>
       )}
 
-      {/* Modal de Cadastro */}
+      {/* Modal de Cadastro de Carga */}
       {showCadastro && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999] overflow-y-auto animate-fade-in">
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full my-8 relative z-[10000] animate-fade-in-scale">
@@ -334,6 +457,20 @@ export default function CooperativaDashboard() {
                 refetch();
               }}
               onCancel={() => setShowCadastro(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Cadastro de Empresa */}
+      {showCadastroEmpresa && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999] overflow-y-auto animate-fade-in">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full my-8 relative z-[10000] animate-fade-in-scale">
+            <EmpresaForm
+              onSuccess={() => {
+                setShowCadastroEmpresa(false);
+              }}
+              onCancel={() => setShowCadastroEmpresa(false)}
             />
           </div>
         </div>
@@ -406,18 +543,35 @@ export default function CooperativaDashboard() {
                 </div>
               </div>
 
-              {cargaSelecionada.status === 'em_transito' && (
+              <div className="flex gap-3">
+                {cargaSelecionada.status === 'em_transito' && (
+                  <button
+                    onClick={() => handleMarcarEntregue(cargaSelecionada.id)}
+                    className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition"
+                  >
+                    ✓ Marcar como Entregue
+                  </button>
+                )}
                 <button
-                  onClick={() => handleMarcarEntregue(cargaSelecionada.id)}
-                  className="w-full px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition"
+                  onClick={() => handleExcluirCarga(cargaSelecionada.id)}
+                  className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition"
                 >
-                  ✓ Marcar como Entregue
+                  🗑 Excluir
                 </button>
-              )}
+              </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Modal de Cargas */}
+      {showCargas && <CargasModal onClose={() => setShowCargas(false)} />}
+
+      {/* Modal de Empresas */}
+      {showEmpresas && <EmpresasModal onClose={() => setShowEmpresas(false)} />}
+
+      {/* Modal de Configurações */}
+      {showConfiguracoes && <ConfiguracoesModal onClose={() => setShowConfiguracoes(false)} />}
     </div>
   );
 }

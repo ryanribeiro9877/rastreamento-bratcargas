@@ -13,7 +13,7 @@ interface FiltrosCargasProps {
 export default function FiltrosCargasComponent({ 
   filtros, 
   onChange,
-  showEmbarcadorFilter = false 
+  showEmbarcadorFilter = false
 }: FiltrosCargasProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -48,7 +48,7 @@ export default function FiltrosCargasComponent({
   }).length;
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+    <div className="rounded-lg shadow-sm border mb-6 bg-white border-gray-200">
       {/* Header do Filtro */}
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center justify-between">
@@ -58,7 +58,7 @@ export default function FiltrosCargasComponent({
             </svg>
             <h3 className="font-semibold text-gray-900">Filtros</h3>
             {filtrosAtivos > 0 && (
-              <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+              <span className="px-2 py-1 text-xs font-medium rounded-full bg-[#009440]/20 text-[#009440]">
                 {filtrosAtivos} {filtrosAtivos === 1 ? 'ativo' : 'ativos'}
               </span>
             )}
@@ -68,17 +68,17 @@ export default function FiltrosCargasComponent({
             {filtrosAtivos > 0 && (
               <button
                 onClick={limparFiltros}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                className="text-sm font-medium text-[#009440] hover:text-[#007a35]"
               >
                 Limpar
               </button>
             )}
             <button
               onClick={() => setExpanded(!expanded)}
-              className="p-1 hover:bg-gray-100 rounded transition"
+              className="p-1 rounded transition hover:bg-gray-100"
             >
               <svg
-                className={`w-5 h-5 text-gray-600 transition-transform ${expanded ? 'rotate-180' : ''}`}
+                className={`w-5 h-5 transition-transform ${expanded ? 'rotate-180' : ''} text-gray-600`}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -91,7 +91,7 @@ export default function FiltrosCargasComponent({
       </div>
 
       {/* Filtros Rápidos - Sempre Visíveis */}
-      <div className="p-4 bg-gray-50 border-b border-gray-200">
+      <div className="p-4 border-b bg-gray-50 border-gray-200">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           {/* Status da Carga */}
           <button

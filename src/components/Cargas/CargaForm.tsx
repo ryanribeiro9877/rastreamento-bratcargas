@@ -1,10 +1,11 @@
 // components/Cargas/CargaForm.tsx - Formulário de Cadastro de Carga
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { useCargas } from '../../hooks/useCargas';
 import { rastreamentoService } from '../../services/rastreamento';
 import { supabase } from '../../services/supabase';
 import { geocodeCidadeUf } from '../../services/mapboxGeocoding';
+import { buscarEnderecoPorCep, formatarCep } from '../../services/viaCep';
 import type { CargaFormData } from '../../types';
 import { UFS } from '../../utils/formatters';
 
@@ -31,14 +32,26 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
     whatsappUrl: string;
     smsUrl: string;
   }>(null);
+
+  // Refs para auto-foco dos campos de telefone
+  const telefone1NumeroRef = useRef<HTMLInputElement>(null);
+  const telefoneWhatsappNumeroRef = useRef<HTMLInputElement>(null);
+  const origemNumeroRef = useRef<HTMLInputElement>(null);
+  const destinoNumeroRef = useRef<HTMLInputElement>(null);
+
+  // Estados para loading de busca de CEP
+  const [buscandoCepOrigem, setBuscandoCepOrigem] = useState(false);
+  const [buscandoCepDestino, setBuscandoCepDestino] = useState(false);
   
   const [formData, setFormData] = useState<CargaFormData>({
     nota_fiscal: '',
     embarcador_id: embarcadorId || '',
     origem_cidade: '',
     origem_uf: '',
+    origem_bairro: '',
     destino_cidade: '',
     destino_uf: '',
+    destino_bairro: '',
     toneladas: 0,
     descricao: '',
     data_carregamento: '',
@@ -62,21 +75,43 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
   }, [formData.data_carregamento]);
 
   useEffect(() => {
-    if (embarcadorId) return;
+    async function carregarEmbarcadores() {
+      try {
+        console.log('Carregando embarcadores... embarcadorId:', embarcadorId);
+        
+        // Se já tem embarcadorId, não precisa carregar lista
+        if (embarcadorId) {
+          console.log('Usando embarcadorId fixo:', embarcadorId);
+          return;
+        }
 
-    supabase
-      .from('embarcadores')
-      .select('id,razao_social')
-      .eq('ativo', true)
-      .order('razao_social', { ascending: true })
-      .then(({ data, error: fetchError }) => {
+        // Buscar todos os embarcadores (sem filtro de ativo para debug)
+        const { data, error: fetchError } = await supabase
+          .from('embarcadores')
+          .select('id, razao_social, ativo')
+          .order('razao_social', { ascending: true });
+
+        console.log('Resposta embarcadores:', { data, error: fetchError });
+
         if (fetchError) {
           console.error('Erro ao buscar embarcadores:', fetchError);
           return;
         }
-        setEmbarcadores((data as any[])?.map((e) => ({ id: e.id, razao_social: e.razao_social })) ?? []);
-      });
+
+        const lista = (data as any[])?.map((e) => ({ id: e.id, razao_social: e.razao_social })) ?? [];
+        console.log('Lista de embarcadores processada:', lista);
+        setEmbarcadores(lista);
+      } catch (err) {
+        console.error('Erro ao carregar embarcadores:', err);
+      }
+    }
+
+    carregarEmbarcadores();
   }, [embarcadorId]);
+
+  function handleChange(field: keyof CargaFormData, value: any) {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  }
 
   function somenteDigitos(value: string): string {
     return value.replace(/\D/g, '');
@@ -105,14 +140,80 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
     return `(${digits}${digits.length === 2 ? ')' : ''}`;
   }
 
-  function handleDddChange(valor: string, setter: (v: string) => void) {
+  function handleDddChange(
+    valor: string, 
+    setter: (v: string) => void,
+    nextFieldRef?: React.RefObject<HTMLInputElement>
+  ) {
     const digits = somenteDigitos(valor).slice(0, 2);
     setter(digits);
+    // Auto-foco para o campo de telefone quando DDD completo (2 dígitos)
+    if (digits.length === 2 && nextFieldRef?.current) {
+      nextFieldRef.current.focus();
+    }
   }
 
   function handleTelefoneChange(valor: string, setter: (v: string) => void) {
     const digits = somenteDigitos(valor).slice(0, 9);
     setter(digits);
+  }
+
+  function formatarPlaca(valor: string): string {
+    // Remove tudo que não é letra ou número
+    const limpo = valor.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 7);
+    if (limpo.length <= 3) return limpo;
+    return `${limpo.slice(0, 3)}-${limpo.slice(3)}`;
+  }
+
+  function handlePlacaChange(valor: string) {
+    const limpo = valor.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 7);
+    handleChange('placa_veiculo', limpo);
+  }
+
+  async function handleCepOrigemChange(valor: string) {
+    const cepLimpo = valor.replace(/\D/g, '').slice(0, 8);
+    handleChange('origem_cep', cepLimpo);
+
+    if (cepLimpo.length === 8) {
+      setBuscandoCepOrigem(true);
+      const endereco = await buscarEnderecoPorCep(cepLimpo);
+      setBuscandoCepOrigem(false);
+
+      if (endereco) {
+        setFormData(prev => ({
+          ...prev,
+          origem_cidade: endereco.cidade,
+          origem_uf: endereco.uf,
+          origem_bairro: endereco.bairro,
+          origem_logradouro: endereco.logradouro
+        }));
+        // Auto-foco no campo de número
+        setTimeout(() => origemNumeroRef.current?.focus(), 100);
+      }
+    }
+  }
+
+  async function handleCepDestinoChange(valor: string) {
+    const cepLimpo = valor.replace(/\D/g, '').slice(0, 8);
+    handleChange('destino_cep', cepLimpo);
+
+    if (cepLimpo.length === 8) {
+      setBuscandoCepDestino(true);
+      const endereco = await buscarEnderecoPorCep(cepLimpo);
+      setBuscandoCepDestino(false);
+
+      if (endereco) {
+        setFormData(prev => ({
+          ...prev,
+          destino_cidade: endereco.cidade,
+          destino_uf: endereco.uf,
+          destino_bairro: endereco.bairro,
+          destino_logradouro: endereco.logradouro
+        }));
+        // Auto-foco no campo de número
+        setTimeout(() => destinoNumeroRef.current?.focus(), 100);
+      }
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -187,16 +288,29 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
           : `[Tipo de carga: ${tipoCarga}]`
       };
 
-      if (!Number.isFinite(dadosParaSalvar.origem_lat as number) || !Number.isFinite(dadosParaSalvar.origem_lng as number)) {
-        const origemGeo = await geocodeCidadeUf({ cidade: dadosParaSalvar.origem_cidade, uf: dadosParaSalvar.origem_uf });
-        dadosParaSalvar.origem_lat = origemGeo.lat;
-        dadosParaSalvar.origem_lng = origemGeo.lng;
+      // Geocodificação com fallback para coordenadas padrão
+      try {
+        if (!Number.isFinite(dadosParaSalvar.origem_lat as number) || !Number.isFinite(dadosParaSalvar.origem_lng as number)) {
+          const origemGeo = await geocodeCidadeUf({ cidade: dadosParaSalvar.origem_cidade, uf: dadosParaSalvar.origem_uf });
+          dadosParaSalvar.origem_lat = origemGeo.lat;
+          dadosParaSalvar.origem_lng = origemGeo.lng;
+        }
+      } catch (geoError) {
+        console.warn('Erro ao geocodificar origem, usando coordenadas padrão:', geoError);
+        dadosParaSalvar.origem_lat = -12.9714;
+        dadosParaSalvar.origem_lng = -38.5014;
       }
 
-      if (!Number.isFinite(dadosParaSalvar.destino_lat as number) || !Number.isFinite(dadosParaSalvar.destino_lng as number)) {
-        const destinoGeo = await geocodeCidadeUf({ cidade: dadosParaSalvar.destino_cidade, uf: dadosParaSalvar.destino_uf });
-        dadosParaSalvar.destino_lat = destinoGeo.lat;
-        dadosParaSalvar.destino_lng = destinoGeo.lng;
+      try {
+        if (!Number.isFinite(dadosParaSalvar.destino_lat as number) || !Number.isFinite(dadosParaSalvar.destino_lng as number)) {
+          const destinoGeo = await geocodeCidadeUf({ cidade: dadosParaSalvar.destino_cidade, uf: dadosParaSalvar.destino_uf });
+          dadosParaSalvar.destino_lat = destinoGeo.lat;
+          dadosParaSalvar.destino_lng = destinoGeo.lng;
+        }
+      } catch (geoError) {
+        console.warn('Erro ao geocodificar destino, usando coordenadas padrão:', geoError);
+        dadosParaSalvar.destino_lat = -12.9714;
+        dadosParaSalvar.destino_lng = -38.5014;
       }
 
       // Criar carga
@@ -232,10 +346,6 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
     } finally {
       setLoading(false);
     }
-  }
-
-  function handleChange(field: keyof CargaFormData, value: any) {
-    setFormData(prev => ({ ...prev, [field]: value }));
   }
 
   return (
@@ -380,10 +490,11 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
               </label>
               <input
                 type="text"
-                value={formData.placa_veiculo}
-                onChange={(e) => handleChange('placa_veiculo', e.target.value.toUpperCase())}
+                value={formatarPlaca(formData.placa_veiculo || '')}
+                onChange={(e) => handlePlacaChange(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="ABC-1234"
+                placeholder="XXX-XXXX"
+                maxLength={8}
               />
             </div>
           </div>
@@ -400,7 +511,7 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
                   type="text"
                   inputMode="numeric"
                   value={formatarDDD(telefone1Ddd)}
-                  onChange={(e) => handleDddChange(e.target.value, setTelefone1Ddd)}
+                  onChange={(e) => handleDddChange(e.target.value, setTelefone1Ddd, telefone1NumeroRef)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="(11)"
                 />
@@ -408,13 +519,14 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
               <div className="md:col-span-2">
                 <label className="block text-xs font-medium text-gray-600 mb-1">Número (9 dígitos)</label>
                 <input
+                  ref={telefone1NumeroRef}
                   type="text"
                   inputMode="numeric"
                   value={formatarCelular(telefone1Numero)}
                   onChange={(e) => handleTelefoneChange(e.target.value, setTelefone1Numero)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="9xxxx-xxxx"
-                />
+/>
               </div>
             </div>
 
@@ -437,7 +549,7 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
                       type="text"
                       inputMode="numeric"
                       value={formatarDDD(telefoneWhatsappDdd)}
-                      onChange={(e) => handleDddChange(e.target.value, setTelefoneWhatsappDdd)}
+                      onChange={(e) => handleDddChange(e.target.value, setTelefoneWhatsappDdd, telefoneWhatsappNumeroRef)}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="(11)"
                     />
@@ -445,6 +557,7 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
                   <div className="md:col-span-2">
                     <label className="block text-xs font-medium text-gray-600 mb-1">Número (9 dígitos)</label>
                     <input
+                      ref={telefoneWhatsappNumeroRef}
                       type="text"
                       inputMode="numeric"
                       value={formatarCelular(telefoneWhatsappNumero)}
@@ -552,59 +665,183 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
         <div className="space-y-4 animate-fade-in">
           <h3 className="text-lg font-semibold text-gray-900">Rota</h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Cidade de saída *</label>
-              <input
-                type="text"
-                value={formData.origem_cidade}
-                onChange={(e) => handleChange('origem_cidade', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Ex: Salvador"
-                required
-              />
+          <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 mb-2">
+            <h4 className="text-sm font-semibold text-blue-800 mb-3">Origem (Saída)</h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">CEP</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={formatarCep(formData.origem_cep || '')}
+                    onChange={(e) => handleCepOrigemChange(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="00000-000"
+                    maxLength={9}
+                  />
+                  {buscandoCepOrigem && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <svg className="animate-spin h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Número *</label>
+                <input
+                  ref={origemNumeroRef}
+                  type="text"
+                  value={formData.origem_numero || ''}
+                  onChange={(e) => handleChange('origem_numero', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+                  placeholder="Nº"
+                  disabled={formData.origem_sem_numero}
+                />
+              </div>
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 text-sm text-gray-700 pb-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.origem_sem_numero || false}
+                    onChange={(e) => {
+                      handleChange('origem_sem_numero', e.target.checked);
+                      if (e.target.checked) handleChange('origem_numero', 'S/N');
+                      else handleChange('origem_numero', '');
+                    }}
+                  />
+                  Sem número
+                </label>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Estado de saída *</label>
-              <select
-                value={formData.origem_uf}
-                onChange={(e) => handleChange('origem_uf', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              >
-                <option value="">Selecione</option>
-                {UFS.map((uf) => (
-                  <option key={uf} value={uf}>{uf}</option>
-                ))}
-              </select>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Logradouro</label>
+                <input
+                  type="text"
+                  value={formData.origem_logradouro || ''}
+                  onChange={(e) => handleChange('origem_logradouro', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50"
+                  placeholder="Preenchido automaticamente"
+                  readOnly
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Bairro</label>
+                <input
+                  type="text"
+                  value={formData.origem_bairro || ''}
+                  onChange={(e) => handleChange('origem_bairro', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50"
+                  placeholder="Preenchido automaticamente"
+                  readOnly
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Cidade/UF</label>
+                <input
+                  type="text"
+                  value={formData.origem_cidade ? `${formData.origem_cidade}/${formData.origem_uf}` : ''}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50"
+                  placeholder="Preenchido automaticamente"
+                  readOnly
+                />
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Cidade de destino *</label>
-              <input
-                type="text"
-                value={formData.destino_cidade}
-                onChange={(e) => handleChange('destino_cidade', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Ex: Feira de Santana"
-                required
-              />
+          <div className="p-3 bg-green-50 rounded-lg border border-green-100">
+            <h4 className="text-sm font-semibold text-green-800 mb-3">Destino (Chegada)</h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">CEP</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={formatarCep(formData.destino_cep || '')}
+                    onChange={(e) => handleCepDestinoChange(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="00000-000"
+                    maxLength={9}
+                  />
+                  {buscandoCepDestino && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <svg className="animate-spin h-5 w-5 text-green-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Número *</label>
+                <input
+                  ref={destinoNumeroRef}
+                  type="text"
+                  value={formData.destino_numero || ''}
+                  onChange={(e) => handleChange('destino_numero', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-100"
+                  placeholder="Nº"
+                  disabled={formData.destino_sem_numero}
+                />
+              </div>
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 text-sm text-gray-700 pb-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.destino_sem_numero || false}
+                    onChange={(e) => {
+                      handleChange('destino_sem_numero', e.target.checked);
+                      if (e.target.checked) handleChange('destino_numero', 'S/N');
+                      else handleChange('destino_numero', '');
+                    }}
+                  />
+                  Sem número
+                </label>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Estado de destino *</label>
-              <select
-                value={formData.destino_uf}
-                onChange={(e) => handleChange('destino_uf', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              >
-                <option value="">Selecione</option>
-                {UFS.map((uf) => (
-                  <option key={uf} value={uf}>{uf}</option>
-                ))}
-              </select>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Logradouro</label>
+                <input
+                  type="text"
+                  value={formData.destino_logradouro || ''}
+                  onChange={(e) => handleChange('destino_logradouro', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50"
+                  placeholder="Preenchido automaticamente"
+                  readOnly
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Bairro</label>
+                <input
+                  type="text"
+                  value={formData.destino_bairro || ''}
+                  onChange={(e) => handleChange('destino_bairro', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50"
+                  placeholder="Preenchido automaticamente"
+                  readOnly
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Cidade/UF</label>
+                <input
+                  type="text"
+                  value={formData.destino_cidade ? `${formData.destino_cidade}/${formData.destino_uf}` : ''}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50"
+                  placeholder="Preenchido automaticamente"
+                  readOnly
+                />
+              </div>
             </div>
           </div>
         </div>

@@ -162,7 +162,7 @@ export function AutorizacaoMotorista() {
             <Truck className="w-10 h-10 text-blue-600" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Braticargas
+            BratCargas
           </h1>
           <p className="text-gray-600">Sistema de Rastreamento de Cargas</p>
         </div>

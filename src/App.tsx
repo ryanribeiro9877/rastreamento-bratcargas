@@ -2,7 +2,7 @@
 
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './hooks/useAuth';
+import { useAuth, AuthProvider } from './hooks/useAuth';
 import Login from './components/Auth/Login';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import EmbarcadorDashboard from './components/Dashboard/EmbarcadorDashboard';
@@ -42,7 +42,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   }
 }
 
-function App() {
+function AppContent() {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -60,9 +60,7 @@ function App() {
   }
 
   return (
-    <BrowserRouter>
-      <ErrorBoundary>
-        <Routes>
+    <Routes>
           {/* Rota de Login */}
           <Route 
             path="/login" 
@@ -120,7 +118,17 @@ function App() {
               </div>
             } 
           />
-        </Routes>
+    </Routes>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <ErrorBoundary>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
       </ErrorBoundary>
     </BrowserRouter>
   );
