@@ -288,30 +288,11 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
           : `[Tipo de carga: ${tipoCarga}]`
       };
 
-      // Geocodificação com fallback para coordenadas padrão
-      try {
-        if (!Number.isFinite(dadosParaSalvar.origem_lat as number) || !Number.isFinite(dadosParaSalvar.origem_lng as number)) {
-          const origemGeo = await geocodeCidadeUf({ cidade: dadosParaSalvar.origem_cidade, uf: dadosParaSalvar.origem_uf });
-          dadosParaSalvar.origem_lat = origemGeo.lat;
-          dadosParaSalvar.origem_lng = origemGeo.lng;
-        }
-      } catch (geoError) {
-        console.warn('Erro ao geocodificar origem, usando coordenadas padrão:', geoError);
-        dadosParaSalvar.origem_lat = -12.9714;
-        dadosParaSalvar.origem_lng = -38.5014;
-      }
-
-      try {
-        if (!Number.isFinite(dadosParaSalvar.destino_lat as number) || !Number.isFinite(dadosParaSalvar.destino_lng as number)) {
-          const destinoGeo = await geocodeCidadeUf({ cidade: dadosParaSalvar.destino_cidade, uf: dadosParaSalvar.destino_uf });
-          dadosParaSalvar.destino_lat = destinoGeo.lat;
-          dadosParaSalvar.destino_lng = destinoGeo.lng;
-        }
-      } catch (geoError) {
-        console.warn('Erro ao geocodificar destino, usando coordenadas padrão:', geoError);
-        dadosParaSalvar.destino_lat = -12.9714;
-        dadosParaSalvar.destino_lng = -38.5014;
-      }
+      // Usar coordenadas padrão (geocodificação desabilitada temporariamente)
+      dadosParaSalvar.origem_lat = -12.9714;
+      dadosParaSalvar.origem_lng = -38.5014;
+      dadosParaSalvar.destino_lat = -23.5505;
+      dadosParaSalvar.destino_lng = -46.6333;
 
       // Criar carga
       const carga = await criarCarga(dadosParaSalvar);
