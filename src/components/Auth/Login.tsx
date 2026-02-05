@@ -86,7 +86,16 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#009440] to-[#061735] flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+      <style>{`
+        @keyframes loginEntrance {
+          0% { opacity: 0; transform: translateY(30px) scale(0.97); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .animate-login-entrance {
+          animation: loginEntrance 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+      `}</style>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-login-entrance">
         {/* Header */}
         <div className="bg-[#061735] p-8 text-white">
           <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@1,900&display=swap" rel="stylesheet" />
