@@ -637,8 +637,8 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
               <input
                 type="number"
                 step="0.01"
-                value={formData.toneladas}
-                onChange={(e) => handleChange('toneladas', parseFloat(e.target.value))}
+                value={formData.toneladas || ''}
+                onChange={(e) => handleChange('toneladas', e.target.value ? parseFloat(e.target.value) : 0)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Ex: 25.5"
                 required
