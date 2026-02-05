@@ -325,20 +325,27 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
         ativo: true
       };
 
-      const { data: cargaData, error: insertError } = await supabase
+      const { error: insertError } = await supabase
         .from('cargas')
-        .insert([dadosParaInserir] as any)
-        .select()
-        .single();
+        .insert(dadosParaInserir);
 
       if (insertError) throw insertError;
-      if (!cargaData) throw new Error('Erro ao criar carga: dados não retornados');
 
-      const carga = cargaData as unknown as Carga;
+      const { data: cargaRows, error: fetchError } = await supabase
+        .from('cargas')
+        .select('*')
+        .eq('nota_fiscal', dadosParaInserir.nota_fiscal)
+        .limit(1)
+        .single();
 
-      supabase.from('historico_status').insert([
-        { carga_id: carga.id, status_novo: 'em_transito', observacao: 'Carga criada' }
-      ] as any);
+      if (fetchError) throw fetchError;
+      if (!cargaRows) throw new Error('Erro ao criar carga: dados não retornados');
+
+      const carga = cargaRows as unknown as Carga;
+
+      supabase.from('historico_status').insert({
+        carga_id: carga.id, status_novo: 'em_transito', observacao: 'Carga criada'
+      });
 
       // Se tem telefone do motorista, gerar link de rastreamento
       if (telefoneParaWhatsapp || telefoneParaContato) {
