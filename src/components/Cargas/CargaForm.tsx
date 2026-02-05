@@ -288,11 +288,29 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
           : `[Tipo de carga: ${tipoCarga}]`
       };
 
-      // Usar coordenadas padrão (geocodificação desabilitada temporariamente)
-      dadosParaSalvar.origem_lat = -12.9714;
-      dadosParaSalvar.origem_lng = -38.5014;
-      dadosParaSalvar.destino_lat = -23.5505;
-      dadosParaSalvar.destino_lng = -46.6333;
+      // Geocodificação com timeout e fallback
+      const geocodeComTimeout = async (cidade: string, uf: string) => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        try {
+          const result = await geocodeCidadeUf({ cidade, uf });
+          clearTimeout(timeout);
+          return result;
+        } catch {
+          clearTimeout(timeout);
+          return null;
+        }
+      };
+
+      const [origemGeo, destinoGeo] = await Promise.all([
+        geocodeComTimeout(dadosParaSalvar.origem_cidade, dadosParaSalvar.origem_uf),
+        geocodeComTimeout(dadosParaSalvar.destino_cidade, dadosParaSalvar.destino_uf)
+      ]);
+
+      dadosParaSalvar.origem_lat = origemGeo?.lat ?? -12.9714;
+      dadosParaSalvar.origem_lng = origemGeo?.lng ?? -38.5014;
+      dadosParaSalvar.destino_lat = destinoGeo?.lat ?? -23.5505;
+      dadosParaSalvar.destino_lng = destinoGeo?.lng ?? -46.6333;
 
       // Criar carga
       const carga = await criarCarga(dadosParaSalvar);
