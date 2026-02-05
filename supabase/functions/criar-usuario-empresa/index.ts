@@ -109,7 +109,7 @@ async function enviarEmailCredenciais(
                 </div>
                 
                 <p>Para acessar o sistema, utilize o link abaixo:</p>
-                <p><a href="https://bratcargas.com.br/login" style="color: #2563eb;">https://bratcargas.com.br/login</a></p>
+                <p><a href="https://rastreamentobratcargas.netlify.app/" style="color: #2563eb;">https://rastreamentobratcargas.netlify.app/</a></p>
                 
                 <div class="warning">
                   <strong>⚠️ Importante:</strong>
