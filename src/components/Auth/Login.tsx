@@ -4,6 +4,31 @@ import { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 
+// Função para traduzir mensagens de erro do Supabase
+function traduzirErro(mensagem: string): string {
+  const traducoes: Record<string, string> = {
+    'Invalid login credentials': 'Email ou senha inválidos',
+    'Email not confirmed': 'Email não confirmado. Verifique sua caixa de entrada.',
+    'User not found': 'Usuário não encontrado',
+    'Invalid email or password': 'Email ou senha inválidos',
+    'Too many requests': 'Muitas tentativas. Aguarde alguns minutos.',
+    'Network request failed': 'Erro de conexão. Verifique sua internet.',
+    'User already registered': 'Este email já está cadastrado',
+    'Password should be at least 6 characters': 'A senha deve ter pelo menos 6 caracteres',
+    'Unable to validate email address: invalid format': 'Formato de email inválido',
+    'Email rate limit exceeded': 'Limite de envio de emails excedido. Tente novamente mais tarde.',
+    'For security purposes, you can only request this once every 60 seconds': 'Por segurança, aguarde 60 segundos antes de tentar novamente.',
+  };
+
+  for (const [ingles, portugues] of Object.entries(traducoes)) {
+    if (mensagem.toLowerCase().includes(ingles.toLowerCase())) {
+      return portugues;
+    }
+  }
+  
+  return mensagem;
+}
+
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,7 +55,7 @@ export default function Login() {
       navigate('/dashboard');
     } catch (err: any) {
       console.error('Erro no login:', err);
-      setError(err.message || 'Erro ao fazer login. Verifique suas credenciais.');
+      setError(traduzirErro(err.message || 'Erro ao fazer login. Verifique suas credenciais.'));
     } finally {
       setLoading(false);
     }
@@ -53,7 +78,7 @@ export default function Login() {
       setShowResetPassword(false);
     } catch (err: any) {
       console.error('Erro ao recuperar senha:', err);
-      setError(err.message || 'Erro ao enviar email de recuperação.');
+      setError(traduzirErro(err.message || 'Erro ao enviar email de recuperação.'));
     } finally {
       setLoading(false);
     }
