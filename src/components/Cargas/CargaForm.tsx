@@ -1,13 +1,11 @@
 // components/Cargas/CargaForm.tsx - Formulário de Cadastro de Carga
 
 import { useMemo, useState, useEffect, useRef } from 'react';
-import { useCargas } from '../../hooks/useCargas';
 import { rastreamentoService } from '../../services/rastreamento';
 import { supabase } from '../../services/supabase';
-import { geocodeCidadeUf } from '../../services/mapboxGeocoding';
 import { buscarEnderecoPorCep, formatarCep } from '../../services/viaCep';
-import { withTimeout } from '../../utils/async';
-import type { CargaFormData } from '../../types';
+import { calcularDistanciaTotal } from '../../utils/calculos';
+import type { CargaFormData, Carga } from '../../types';
 import { UFS } from '../../utils/formatters';
 
 interface CargaFormProps {
@@ -17,7 +15,6 @@ interface CargaFormProps {
 }
 
 export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFormProps) {
-  const { criarCarga } = useCargas();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'motorista' | 'empresa' | 'rota' | 'datas'>('motorista');
@@ -294,29 +291,54 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
       dadosParaSalvar.destino_lat = -23.5505;
       dadosParaSalvar.destino_lng = -46.6333;
 
-      try {
-        const [origem, destino] = await Promise.all([
-          withTimeout(
-            geocodeCidadeUf({ cidade: formData.origem_cidade, uf: formData.origem_uf }),
-            8000,
-            'Timeout geocoding origem'
-          ),
-          withTimeout(
-            geocodeCidadeUf({ cidade: formData.destino_cidade, uf: formData.destino_uf }),
-            8000,
-            'Timeout geocoding destino'
-          ),
-        ]);
-        dadosParaSalvar.origem_lat = origem.lat;
-        dadosParaSalvar.origem_lng = origem.lng;
-        dadosParaSalvar.destino_lat = destino.lat;
-        dadosParaSalvar.destino_lng = destino.lng;
-      } catch (geoErr) {
-        console.warn('Geocoding falhou, usando coordenadas padrão:', geoErr);
-      }
+      const distanciaTotal = calcularDistanciaTotal(
+        dadosParaSalvar.origem_lat || 0,
+        dadosParaSalvar.origem_lng || 0,
+        dadosParaSalvar.destino_lat || 0,
+        dadosParaSalvar.destino_lng || 0
+      );
 
-      // Criar carga
-      const carga = await criarCarga(dadosParaSalvar);
+      const dadosParaInserir = {
+        embarcador_id: dadosParaSalvar.embarcador_id,
+        nota_fiscal: dadosParaSalvar.nota_fiscal,
+        origem_cidade: dadosParaSalvar.origem_cidade,
+        origem_uf: dadosParaSalvar.origem_uf,
+        origem_bairro: dadosParaSalvar.origem_bairro || null,
+        origem_lat: dadosParaSalvar.origem_lat || null,
+        origem_lng: dadosParaSalvar.origem_lng || null,
+        destino_cidade: dadosParaSalvar.destino_cidade,
+        destino_uf: dadosParaSalvar.destino_uf,
+        destino_bairro: dadosParaSalvar.destino_bairro || null,
+        destino_lat: dadosParaSalvar.destino_lat || null,
+        destino_lng: dadosParaSalvar.destino_lng || null,
+        toneladas: dadosParaSalvar.toneladas || 0,
+        descricao: dadosParaSalvar.descricao || null,
+        data_carregamento: dadosParaSalvar.data_carregamento,
+        prazo_entrega: dadosParaSalvar.prazo_entrega,
+        motorista_nome: dadosParaSalvar.motorista_nome || null,
+        motorista_telefone: dadosParaSalvar.motorista_telefone || null,
+        placa_veiculo: dadosParaSalvar.placa_veiculo || null,
+        distancia_total_km: distanciaTotal,
+        status: 'em_transito',
+        status_prazo: 'no_prazo',
+        velocidade_media_estimada: dadosParaSalvar.velocidade_media_estimada || 60,
+        ativo: true
+      };
+
+      const { data: cargaData, error: insertError } = await supabase
+        .from('cargas')
+        .insert([dadosParaInserir] as any)
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+      if (!cargaData) throw new Error('Erro ao criar carga: dados não retornados');
+
+      const carga = cargaData as unknown as Carga;
+
+      supabase.from('historico_status').insert([
+        { carga_id: carga.id, status_novo: 'em_transito', observacao: 'Carga criada' }
+      ] as any);
 
       // Se tem telefone do motorista, gerar link de rastreamento
       if (telefoneParaWhatsapp || telefoneParaContato) {
