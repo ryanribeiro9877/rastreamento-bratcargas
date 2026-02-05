@@ -9,48 +9,19 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface CriarUsuarioRequest {
-  razao_social: string;
-  cnpj: string;
-  email_contato: string;
-  telefone?: string;
-  cep?: string;
-  logradouro?: string;
-  numero?: string;
-  complemento?: string;
-  bairro?: string;
-  cidade?: string;
-  uf?: string;
-}
-
-function gerarSenhaDefinitiva(tamanho: number = 16): string {
-  // Gera uma senha forte e definitiva para o cliente
-  const maiusculas = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  const minusculas = 'abcdefghjkmnpqrstuvwxyz';
-  const numeros = '23456789';
-  const especiais = '!@#$%&*';
-  
-  // Garantir pelo menos um de cada tipo
+function gerarSenhaAleatoria(tamanho = 10): string {
+  const caracteres = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
   let senha = '';
-  senha += maiusculas.charAt(Math.floor(Math.random() * maiusculas.length));
-  senha += minusculas.charAt(Math.floor(Math.random() * minusculas.length));
-  senha += numeros.charAt(Math.floor(Math.random() * numeros.length));
-  senha += especiais.charAt(Math.floor(Math.random() * especiais.length));
-  
-  // Preencher o restante
-  const todosCaracteres = maiusculas + minusculas + numeros + especiais;
-  for (let i = senha.length; i < tamanho; i++) {
-    senha += todosCaracteres.charAt(Math.floor(Math.random() * todosCaracteres.length));
+  for (let i = 0; i < tamanho; i++) {
+    senha += caracteres.charAt(Math.floor(Math.random() * caracteres.length));
   }
-  
-  // Embaralhar a senha
-  return senha.split('').sort(() => Math.random() - 0.5).join('');
+  return senha;
 }
 
 async function enviarEmailCredenciais(
   email: string,
-  razaoSocial: string,
   senha: string,
+  razaoSocial: string,
   resendApiKey: string
 ): Promise<boolean> {
   try {
@@ -63,7 +34,7 @@ async function enviarEmailCredenciais(
       body: JSON.stringify({
         from: 'BratCargas <onboarding@resend.dev>',
         to: [email],
-        subject: 'Bem-vindo ao Sistema BratCargas - Suas Credenciais de Acesso',
+        subject: 'Bem-vindo ao BratCargas - Suas credenciais de acesso',
         html: `
           <!DOCTYPE html>
           <html>
@@ -74,7 +45,7 @@ async function enviarEmailCredenciais(
               body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
               .container { max-width: 600px; margin: 0 auto; padding: 20px; }
               .header { background: #061735; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
-              .header h1 { font-family: 'Inter', sans-serif; font-weight: 900; font-style: italic; font-size: 32px; text-transform: uppercase; margin: 0; letter-spacing: 1px; }
+              .header h1 { font-family: 'Inter', sans-serif; font-weight: 900; font-style: italic; font-size: 32px; margin: 0; letter-spacing: 1px; }
               .header p { margin: 5px 0 0 0; font-size: 14px; }
               .content { background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-bottom: none; text-align: center; }
               .credentials { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #e5e7eb; text-align: center; }
@@ -90,12 +61,12 @@ async function enviarEmailCredenciais(
           <body>
             <div class="container">
               <div class="header">
-                <h1>BRATCARGAS</h1>
+                <h1>BRATCargas</h1>
                 <p>Sistema de Rastreamento de Cargas</p>
               </div>
               <div class="content">
-                <h2>Olá, ${razaoSocial}!</h2>
-                <p>Sua empresa foi cadastrada com sucesso no sistema BratCargas.<br>Abaixo estão suas credenciais de acesso:</p>
+                <h2>Ola, ${razaoSocial}!</h2>
+                <p>Sua empresa foi cadastrada com sucesso no sistema BratCargas.<br>Abaixo estao suas credenciais de acesso:</p>
                 
                 <div class="credentials">
                   <div class="credential-item">
@@ -112,17 +83,17 @@ async function enviarEmailCredenciais(
                 <p><a href="https://rastreamentobratcargas.netlify.app/" style="color: #2563eb;">https://rastreamentobratcargas.netlify.app/</a></p>
                 
                 <div class="warning">
-                  <strong>⚠️ Importante:</strong>
+                  <strong>Importante:</strong>
                   <ul>
-                    <li>Esta é sua senha de acesso ao sistema. Guarde-a em local seguro.</li>
-                    <li>Você pode alterar sua senha a qualquer momento nas configurações do sistema.</li>
-                    <li>Não compartilhe suas credenciais com terceiros.</li>
-                    <li>Em caso de dúvidas, entre em contato com a cooperativa.</li>
+                    <li>Esta e sua senha de acesso ao sistema. Guarde-a em local seguro.</li>
+                    <li>Voce pode alterar sua senha a qualquer momento nas configuracoes do sistema.</li>
+                    <li>Nao compartilhe suas credenciais com terceiros.</li>
+                    <li>Em caso de duvidas, entre em contato com a cooperativa.</li>
                   </ul>
                 </div>
               </div>
               <div class="footer">
-                <p>Este é um e-mail automático. Por favor, não responda.</p>
+                <p>Este e um e-mail automatico. Por favor, nao responda.</p>
                 <p>© ${new Date().getFullYear()} BratCargas - Todos os direitos reservados</p>
               </div>
               <div class="logo-container">
@@ -134,7 +105,6 @@ async function enviarEmailCredenciais(
         `,
       }),
     });
-
     return response.ok;
   } catch (error) {
     console.error('Erro ao enviar email:', error);
@@ -143,7 +113,6 @@ async function enviarEmailCredenciais(
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -153,116 +122,122 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
 
-    // Criar cliente Supabase com service role (admin)
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
+      auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const dados: CriarUsuarioRequest = await req.json();
+    const body = await req.json();
+    const razaoSocial = body.razaoSocial || body.razao_social;
+    const cnpj = body.cnpj;
+    const emailContato = body.emailContato || body.email_contato;
+    const telefone = body.telefone;
 
-    // Validações
-    if (!dados.razao_social || !dados.cnpj || !dados.email_contato) {
+    if (!razaoSocial || !cnpj || !emailContato) {
       return new Response(
-        JSON.stringify({ error: "Dados obrigatórios não informados" }),
+        JSON.stringify({ error: "Campos obrigatorios: razao_social, cnpj, email_contato" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Gerar senha definitiva única para o cliente
-    const senhaDefinitiva = gerarSenhaDefinitiva(16);
+    const { data: empresaExistente } = await supabaseAdmin
+      .from("embarcadores")
+      .select("id")
+      .eq("cnpj", cnpj)
+      .single();
 
-    // 1. Criar usuário no Supabase Auth
+    if (empresaExistente) {
+      return new Response(
+        JSON.stringify({ error: "Ja existe uma empresa cadastrada com este CNPJ" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { data: usuarioExistente } = await supabaseAdmin
+      .from("usuarios_embarcadores")
+      .select("id")
+      .eq("email", emailContato)
+      .single();
+
+    if (usuarioExistente) {
+      return new Response(
+        JSON.stringify({ error: "Ja existe um usuario cadastrado com este email" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const senhaGerada = gerarSenhaAleatoria(10);
+
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: dados.email_contato,
-      password: senhaDefinitiva,
-      email_confirm: true, // Confirmar email automaticamente
-      user_metadata: {
-        razao_social: dados.razao_social,
-        tipo: 'embarcador',
-      },
+      email: emailContato,
+      password: senhaGerada,
+      email_confirm: true,
+      user_metadata: { tipo: 'embarcador', razao_social: razaoSocial },
     });
 
     if (authError) {
-      console.error('Erro ao criar usuário:', authError);
       return new Response(
-        JSON.stringify({ error: authError.message }),
+        JSON.stringify({ error: `Erro ao criar usuario: ${authError.message}` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const userId = authData.user.id;
-
-    // 2. Criar empresa (embarcador)
-    const { data: embarcadorData, error: embarcadorError } = await supabaseAdmin
-      .from('embarcadores')
-      .insert([{
-        razao_social: dados.razao_social,
-        cnpj: dados.cnpj,
-        email_contato: dados.email_contato,
-        emails_alertas: [dados.email_contato],
-        telefone: dados.telefone || null,
-        ativo: true,
-      }])
+    const { data: embarcador, error: embarcadorError } = await supabaseAdmin
+      .from("embarcadores")
+      .insert({
+        razao_social: razaoSocial,
+        cnpj: cnpj,
+        email_contato: emailContato,
+        telefone: telefone || null,
+      })
       .select()
       .single();
 
     if (embarcadorError) {
-      // Se falhar, deletar o usuário criado
-      await supabaseAdmin.auth.admin.deleteUser(userId);
-      console.error('Erro ao criar embarcador:', embarcadorError);
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       return new Response(
-        JSON.stringify({ error: embarcadorError.message }),
+        JSON.stringify({ error: `Erro ao criar empresa: ${embarcadorError.message}` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // 3. Criar perfil do usuário
-    const { error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .insert([{
-        id: userId,
-        email: dados.email_contato,
-        nome: dados.razao_social,
-        tipo: 'embarcador',
-        embarcador_id: embarcadorData.id,
-      }]);
+    const { error: vinculoError } = await supabaseAdmin
+      .from("usuarios_embarcadores")
+      .insert({
+        user_id: authData.user.id,
+        embarcador_id: embarcador.id,
+        nome: razaoSocial,
+        email: emailContato,
+        ativo: true,
+      });
 
-    if (profileError) {
-      console.error('Erro ao criar perfil:', profileError);
-      // Continuar mesmo com erro no perfil
+    if (vinculoError) {
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      await supabaseAdmin.from("embarcadores").delete().eq("id", embarcador.id);
+      return new Response(
+        JSON.stringify({ error: `Erro ao vincular usuario: ${vinculoError.message}` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // 4. Enviar email com credenciais
     let emailEnviado = false;
     if (resendApiKey) {
-      emailEnviado = await enviarEmailCredenciais(
-        dados.email_contato,
-        dados.razao_social,
-        senhaDefinitiva,
-        resendApiKey
-      );
+      emailEnviado = await enviarEmailCredenciais(emailContato, senhaGerada, razaoSocial, resendApiKey);
     }
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Empresa e usuário criados com sucesso',
-        embarcador_id: embarcadorData.id,
-        user_id: userId,
-        email_enviado: emailEnviado,
-        // Retornar senha para exibição caso email não seja enviado
-        senha: senhaDefinitiva,
+        message: "Empresa e usuario criados com sucesso",
+        embarcador: embarcador,
+        usuario: { id: authData.user.id, email: emailContato },
+        senhaGerada: senhaGerada,
+        emailEnviado: emailEnviado,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-
   } catch (error) {
-    console.error('Erro na função:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: `Erro interno: ${(error as Error).message}` }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

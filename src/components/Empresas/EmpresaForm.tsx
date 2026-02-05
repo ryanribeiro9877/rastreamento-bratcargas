@@ -1,7 +1,6 @@
 // components/Empresas/EmpresaForm.tsx - Formulário de Cadastro de Empresa (Embarcador)
 
 import { useState } from 'react';
-import { supabase } from '../../services/supabase';
 import { buscarEnderecoPorCep, formatarCep } from '../../services/viaCep';
 
 interface EmpresaFormProps {
@@ -108,53 +107,40 @@ export default function EmpresaForm({ onSuccess, onCancel }: EmpresaFormProps) {
       if (!formData.email_contato.trim()) {
         throw new Error('E-mail de contato é obrigatório');
       }
-      if (!formData.cep || formData.cep.length !== 8) {
-        throw new Error('CEP é obrigatório');
-      }
-      if (!formData.numero?.trim()) {
-        throw new Error('Número do endereço é obrigatório');
-      }
 
-      // Chamar Edge Function para criar empresa e usuário
-      console.log('Cadastrando empresa e usuário:', formData);
+      console.log('Iniciando cadastro...');
       
-      const { data: functionData, error: functionError } = await supabase.functions.invoke(
-        'criar-usuario-empresa',
+      // Chamar Edge Function para criar empresa e usuário
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/criar-usuario-empresa`,
         {
-          body: {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({
             razao_social: formData.razao_social.trim(),
             cnpj: formData.cnpj,
             email_contato: formData.email_contato.trim(),
             telefone: formData.telefone || null,
-            cep: formData.cep || null,
-            logradouro: formData.logradouro || null,
-            numero: formData.numero || null,
-            bairro: formData.bairro || null,
-            cidade: formData.cidade || null,
-            uf: formData.uf || null,
-          },
+          }),
         }
       );
 
-      if (functionError) {
-        console.error('Erro na função:', functionError);
-        throw new Error(functionError.message || 'Erro ao cadastrar empresa');
-      }
+      const functionData = await response.json();
+      console.log('Resposta:', functionData);
 
-      if (functionData?.error) {
-        console.error('Erro retornado pela função:', functionData.error);
-        if (functionData.error.includes('already been registered')) {
-          throw new Error('Este e-mail já está cadastrado no sistema');
-        }
-        throw new Error(functionData.error);
+      if (!response.ok || functionData?.error) {
+        throw new Error(functionData?.error || 'Erro ao cadastrar empresa');
       }
 
       console.log('Empresa cadastrada com sucesso:', functionData);
       
       // Mostrar senha para o usuário
-      const mensagem = functionData.email_enviado
+      const mensagem = functionData.emailEnviado
         ? `Empresa cadastrada com sucesso!\n\nUm e-mail foi enviado para ${formData.email_contato} com as credenciais de acesso.`
-        : `Empresa cadastrada com sucesso!\n\nCredenciais de acesso:\nE-mail: ${formData.email_contato}\nSenha: ${functionData.senha}\n\n⚠️ Anote a senha e repasse ao cliente, pois ela não será exibida novamente!`;
+        : `Empresa cadastrada com sucesso!\n\nCredenciais de acesso:\nE-mail: ${formData.email_contato}\nSenha: ${functionData.senhaGerada}\n\n⚠️ Anote a senha e repasse ao cliente!`;
       
       alert(mensagem);
       onSuccess?.();
