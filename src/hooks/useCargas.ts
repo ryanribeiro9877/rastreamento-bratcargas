@@ -177,8 +177,8 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
       if (error) throw error;
       if (!data) throw new Error('Erro ao criar carga: dados não retornados');
 
-      // Registrar no histórico
-      await supabase.from('historico_status').insert([
+      // Registrar no histórico (não bloqueia)
+      supabase.from('historico_status').insert([
         {
           carga_id: (data as any).id,
           status_novo: 'em_transito',
@@ -186,7 +186,9 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
         }
       ] as any);
 
-      await fetchCargas();
+      // Atualizar lista em background (não bloqueia)
+      setTimeout(() => fetchCargas(), 100);
+      
       return data as Carga;
     } catch (err) {
       console.error('Erro ao criar carga:', err);
