@@ -88,11 +88,11 @@ export default function Login() {
     <div className="min-h-screen bg-gradient-to-br from-[#009440] to-[#061735] flex items-center justify-center p-4">
       <style>{`
         @keyframes loginEntrance {
-          0% { opacity: 0; transform: translateY(30px) scale(0.97); }
+          0% { opacity: 0; transform: translateY(40px) scale(0.96); }
           100% { opacity: 1; transform: translateY(0) scale(1); }
         }
         .animate-login-entrance {
-          animation: loginEntrance 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          animation: loginEntrance 1.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
         }
       `}</style>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-login-entrance">
