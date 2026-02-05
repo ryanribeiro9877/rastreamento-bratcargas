@@ -63,9 +63,6 @@ class RastreamentoService {
 
       if (error) throw error;
 
-      // Enviar link por WhatsApp (simulado - você precisará integrar com API de WhatsApp)
-      await this.enviarLinkWhatsApp(telefoneMotorista, linkRastreamento);
-
       return linkRastreamento;
     } catch (error) {
       console.error('Erro ao gerar link de rastreamento:', error);
