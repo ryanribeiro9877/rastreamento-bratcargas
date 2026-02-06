@@ -5,9 +5,24 @@ import { supabase } from '../services/supabase';
 import type { Carga, CargaFormData, FiltrosCargas, MetricasDashboard } from '../types';
 import { calcularDistanciaTotal } from '../utils/calculos';
 
+// Helper: obter token de sessão do localStorage (instantâneo, sem await)
+function getAccessTokenSync(): string | null {
+  try {
+    const key = Object.keys(localStorage).find(k => k.includes('auth-token'));
+    if (!key) return null;
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.access_token || null;
+  } catch {
+    return null;
+  }
+}
+
 export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
   const [cargas, setCargas] = useState<Carga[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Memorizar os filtros serializados para evitar loops infinitos
@@ -35,99 +50,96 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
 
   async function fetchCargas() {
     try {
-      setLoading(true);
+      if (isInitialLoad) setLoading(true);
       setError(null);
 
+      const token = getAccessTokenSync();
+      if (!token) return;
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
       const filtrosObj = filtros || {};
 
-      let query = supabase
-        .from('cargas')
-        .select(`
-          *,
-          embarcador:embarcadores(*),
-          ultima_posicao:posicoes_gps(*)
-        `)
-        .eq('ativo', true)
-        .order('created_at', { ascending: false });
+      // Construir query params
+      const params = new URLSearchParams();
+      params.set('select', '*,embarcador:embarcadores(*),posicoes:posicoes_gps(*)');
+      params.set('ativo', 'eq.true');
+      params.set('order', 'created_at.desc');
 
-      // Filtro por embarcador (se for usuário de embarcador)
       if (embarcadorId) {
-        query = query.eq('embarcador_id', embarcadorId);
+        params.set('embarcador_id', `eq.${embarcadorId}`);
       }
-
-      // Aplicar filtros adicionais
       if (filtrosObj.status && filtrosObj.status.length > 0) {
-        query = query.in('status', filtrosObj.status);
+        params.set('status', `in.(${filtrosObj.status.join(',')})`);
       }
-
       if (filtrosObj.status_prazo && filtrosObj.status_prazo.length > 0) {
-        query = query.in('status_prazo', filtrosObj.status_prazo);
+        params.set('status_prazo', `in.(${filtrosObj.status_prazo.join(',')})`);
       }
-
       if (filtrosObj.nota_fiscal) {
-        query = query.ilike('nota_fiscal', `%${filtrosObj.nota_fiscal}%`);
+        params.set('nota_fiscal', `ilike.*${filtrosObj.nota_fiscal}*`);
       }
-
       if (filtrosObj.origem_uf) {
-        query = query.eq('origem_uf', filtrosObj.origem_uf);
+        params.set('origem_uf', `eq.${filtrosObj.origem_uf}`);
       }
-
       if (filtrosObj.destino_uf) {
-        query = query.eq('destino_uf', filtrosObj.destino_uf);
+        params.set('destino_uf', `eq.${filtrosObj.destino_uf}`);
       }
-
       if (filtrosObj.motorista_nome) {
-        query = query.ilike('motorista_nome', `%${filtrosObj.motorista_nome}%`);
+        params.set('motorista_nome', `ilike.*${filtrosObj.motorista_nome}*`);
       }
-
       if (filtrosObj.placa_veiculo) {
-        query = query.ilike('placa_veiculo', `%${filtrosObj.placa_veiculo}%`);
+        params.set('placa_veiculo', `ilike.*${filtrosObj.placa_veiculo}*`);
       }
-
       if (filtrosObj.data_carregamento_inicio) {
-        query = query.gte('data_carregamento', filtrosObj.data_carregamento_inicio);
+        params.set('data_carregamento', `gte.${filtrosObj.data_carregamento_inicio}`);
       }
-
       if (filtrosObj.data_carregamento_fim) {
-        query = query.lte('data_carregamento', filtrosObj.data_carregamento_fim);
+        params.append('data_carregamento', `lte.${filtrosObj.data_carregamento_fim}`);
       }
-
       if (filtrosObj.prazo_entrega_inicio) {
-        query = query.gte('prazo_entrega', filtrosObj.prazo_entrega_inicio);
+        params.set('prazo_entrega', `gte.${filtrosObj.prazo_entrega_inicio}`);
       }
-
       if (filtrosObj.prazo_entrega_fim) {
-        query = query.lte('prazo_entrega', filtrosObj.prazo_entrega_fim);
+        params.append('prazo_entrega', `lte.${filtrosObj.prazo_entrega_fim}`);
       }
 
-      const { data, error: fetchError } = await query;
+      const response = await fetch(`${supabaseUrl}/rest/v1/cargas?${params.toString()}`, {
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${token}`
+        }
+      });
 
-      if (fetchError) throw fetchError;
+      if (!response.ok) {
+        const errBody = await response.text();
+        throw new Error(`Erro ao buscar cargas: ${response.status} - ${errBody}`);
+      }
 
-      // Buscar última posição para cada carga
-      const cargasComPosicao = await Promise.all(
-        (data || []).map(async (carga: any) => {
-          const { data: posicoes } = await supabase
-            .from('posicoes_gps')
-            .select('*')
-            .eq('carga_id', carga.id)
-            .order('timestamp', { ascending: false })
-            .limit(1);
+      const data = await response.json();
 
-          return {
-            ...carga,
-            embarcador: carga.embarcador ?? undefined,
-            ultima_posicao: posicoes && posicoes.length > 0 ? posicoes[0] : undefined
-          } as Carga;
-        })
-      );
+      // Processar cargas: extrair última posição do array de posições
+      const cargasProcessadas = (data || []).map((carga: any) => {
+        const posicoes = carga.posicoes || [];
+        // Ordenar por timestamp desc e pegar a primeira
+        const ultimaPosicao = posicoes.length > 0
+          ? posicoes.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]
+          : undefined;
 
-      setCargas(cargasComPosicao);
+        return {
+          ...carga,
+          embarcador: carga.embarcador ?? undefined,
+          ultima_posicao: ultimaPosicao,
+          posicoes: undefined
+        } as Carga;
+      });
+
+      setCargas(cargasProcessadas);
     } catch (err) {
       console.error('Erro ao buscar cargas:', err);
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
     } finally {
       setLoading(false);
+      if (isInitialLoad) setIsInitialLoad(false);
     }
   }
 
@@ -197,14 +209,32 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
     }
   }
 
+  async function getAuthHeaders() {
+    const token = getAccessTokenSync();
+    if (!token) throw new Error('Usuário não autenticado');
+    return {
+      'Content-Type': 'application/json',
+      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${token}`
+    };
+  }
+
   async function atualizarCarga(id: string, dados: Partial<CargaFormData>): Promise<void> {
     try {
-      const { error } = await supabase
-        .from('cargas')
-        .update(dados)
-        .eq('id', id);
+      const headers = await getAuthHeaders();
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
-      if (error) throw error;
+      const response = await fetch(`${supabaseUrl}/rest/v1/cargas?id=eq.${id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(dados)
+      });
+
+      if (!response.ok) {
+        const errBody = await response.text();
+        throw new Error(`Erro ao atualizar carga: ${response.status} - ${errBody}`);
+      }
+
       await fetchCargas();
     } catch (err) {
       console.error('Erro ao atualizar carga:', err);
@@ -217,25 +247,34 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
       const carga = cargas.find((c) => c.id === id);
       if (!carga) throw new Error('Carga não encontrada');
 
-      const { error } = await supabase
-        .from('cargas')
-        .update({
+      const headers = await getAuthHeaders();
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+      const response = await fetch(`${supabaseUrl}/rest/v1/cargas?id=eq.${id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
           status: 'entregue',
           data_entrega_real: new Date().toISOString()
         })
-        .eq('id', id);
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errBody = await response.text();
+        throw new Error(`Erro ao marcar como entregue: ${response.status} - ${errBody}`);
+      }
 
       // Registrar no histórico
-      await supabase.from('historico_status').insert([
-        {
+      fetch(`${supabaseUrl}/rest/v1/historico_status`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
           carga_id: id,
           status_anterior: carga.status,
           status_novo: 'entregue',
           observacao: 'Carga entregue'
-        }
-      ]);
+        })
+      }).catch(err => console.error('Erro ao registrar histórico:', err));
 
       // Disparar alerta de entrega
       await dispararAlertaEntrega(id);
@@ -252,22 +291,31 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
       const carga = cargas.find((c) => c.id === id);
       if (!carga) throw new Error('Carga não encontrada');
 
-      const { error } = await supabase
-        .from('cargas')
-        .update({ status: 'cancelada' })
-        .eq('id', id);
+      const headers = await getAuthHeaders();
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
-      if (error) throw error;
+      const response = await fetch(`${supabaseUrl}/rest/v1/cargas?id=eq.${id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ status: 'cancelada' })
+      });
+
+      if (!response.ok) {
+        const errBody = await response.text();
+        throw new Error(`Erro ao cancelar carga: ${response.status} - ${errBody}`);
+      }
 
       // Registrar no histórico
-      await supabase.from('historico_status').insert([
-        {
+      fetch(`${supabaseUrl}/rest/v1/historico_status`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
           carga_id: id,
           status_anterior: carga.status,
           status_novo: 'cancelada',
           observacao: motivo
-        }
-      ]);
+        })
+      }).catch(err => console.error('Erro ao registrar histórico:', err));
 
       await fetchCargas();
     } catch (err) {
@@ -278,22 +326,37 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
 
   async function excluirCarga(id: string): Promise<void> {
     try {
-      // Soft delete: marca como inativo em vez de deletar fisicamente
-      const { error } = await supabase
-        .from('cargas')
-        .update({ ativo: false })
-        .eq('id', id);
+      const headers = await getAuthHeaders();
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
-      if (error) throw error;
+      // Excluir alertas relacionados
+      await fetch(`${supabaseUrl}/rest/v1/alertas?carga_id=eq.${id}`, {
+        method: 'DELETE',
+        headers
+      });
 
-      // Registrar no histórico
-      await supabase.from('historico_status').insert([
-        {
-          carga_id: id,
-          status_novo: 'excluida',
-          observacao: 'Carga excluída do sistema'
-        }
-      ]);
+      // Excluir posições GPS relacionadas
+      await fetch(`${supabaseUrl}/rest/v1/posicoes_gps?carga_id=eq.${id}`, {
+        method: 'DELETE',
+        headers
+      });
+
+      // Excluir histórico de status relacionado
+      await fetch(`${supabaseUrl}/rest/v1/historico_status?carga_id=eq.${id}`, {
+        method: 'DELETE',
+        headers
+      });
+
+      // Excluir a carga permanentemente
+      const deleteResponse = await fetch(`${supabaseUrl}/rest/v1/cargas?id=eq.${id}`, {
+        method: 'DELETE',
+        headers
+      });
+
+      if (!deleteResponse.ok) {
+        const errBody = await deleteResponse.text();
+        throw new Error(`Erro ao excluir carga: ${deleteResponse.status} - ${errBody}`);
+      }
 
       await fetchCargas();
     } catch (err) {
@@ -307,15 +370,20 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
       const carga = cargas.find((c) => c.id === cargaId);
       if (!carga) return;
 
-      await supabase.from('alertas').insert([
-        {
+      const headers = await getAuthHeaders();
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+      fetch(`${supabaseUrl}/rest/v1/alertas`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
           carga_id: cargaId,
           tipo: 'entrega',
           destinatario: 'embarcador',
           mensagem: `Carga NF ${carga.nota_fiscal} foi entregue com sucesso!`,
           enviado: false
-        }
-      ]);
+        })
+      }).catch(err => console.error('Erro ao disparar alerta:', err));
     } catch (err) {
       console.error('Erro ao disparar alerta:', err);
     }
@@ -351,18 +419,27 @@ export function useMetricasDashboard(embarcadorId?: string, refreshKey?: number)
     try {
       setLoading(true);
 
-      let query = supabase
-        .from('cargas')
-        .select('*')
-        .eq('ativo', true);
+      const token = getAccessTokenSync();
+      if (!token) return;
 
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      let queryStr = `${supabaseUrl}/rest/v1/cargas?select=status,status_prazo,toneladas&ativo=eq.true`;
       if (embarcadorId) {
-        query = query.eq('embarcador_id', embarcadorId);
+        queryStr += `&embarcador_id=eq.${embarcadorId}`;
       }
 
-      const { data: cargas, error } = await query;
-      if (error) throw error;
+      const response = await fetch(queryStr, {
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${token}`
+        }
+      });
 
+      if (!response.ok) throw new Error('Erro ao buscar métricas');
+
+      const cargas = await response.json();
       const total = cargas?.length || 0;
       const emTransito = cargas?.filter((c) => c.status === 'em_transito').length || 0;
       const entregues = cargas?.filter((c) => c.status === 'entregue').length || 0;

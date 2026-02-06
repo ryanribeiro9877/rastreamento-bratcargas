@@ -4,6 +4,7 @@ import { useMemo, useState, useEffect, useRef } from 'react';
 import { rastreamentoService } from '../../services/rastreamento';
 import { supabase } from '../../services/supabase';
 import { buscarEnderecoPorCep, formatarCep } from '../../services/viaCep';
+import { geocodeCidadeUf } from '../../services/mapboxGeocoding';
 import { calcularDistanciaTotal } from '../../utils/calculos';
 import type { CargaFormData, Carga } from '../../types';
 import { UFS } from '../../utils/formatters';
@@ -72,35 +73,57 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
     return `${yyyy}-${mm}-${dd}T23:59`;
   }, [formData.data_carregamento]);
 
+  // Helper: obter token de sessão sem depender de supabase.auth.getSession() que pode travar
+  function getAccessTokenSync(): string | null {
+    try {
+      const key = Object.keys(localStorage).find(k => k.includes('auth-token'));
+      if (!key) return null;
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed?.access_token || null;
+    } catch {
+      return null;
+    }
+  }
+
   useEffect(() => {
+    if (embarcadorId) return;
+
     async function carregarEmbarcadores() {
       try {
-        console.log('Carregando embarcadores... embarcadorId:', embarcadorId);
-        
-        // Se já tem embarcadorId, não precisa carregar lista
-        if (embarcadorId) {
-          console.log('Usando embarcadorId fixo:', embarcadorId);
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+        // Obter token do localStorage (instantâneo, sem await)
+        const token = getAccessTokenSync();
+
+        if (!token) {
+          console.warn('[EMBARCADORES] Sem token de autenticação');
           return;
         }
 
-        // Buscar todos os embarcadores (sem filtro de ativo para debug)
-        const { data, error: fetchError } = await supabase
-          .from('embarcadores')
-          .select('id, razao_social, ativo')
-          .order('razao_social', { ascending: true });
+        console.log('[EMBARCADORES] Buscando...');
+        const response = await fetch(
+          `${supabaseUrl}/rest/v1/embarcadores?select=id,razao_social&ativo=eq.true&order=razao_social.asc`,
+          {
+            headers: {
+              'apikey': supabaseKey,
+              'Authorization': `Bearer ${token}`
+            }
+          }
+        );
 
-        console.log('Resposta embarcadores:', { data, error: fetchError });
+        console.log('[EMBARCADORES] Status:', response.status);
+        if (!response.ok) return;
 
-        if (fetchError) {
-          console.error('Erro ao buscar embarcadores:', fetchError);
-          return;
+        const data = await response.json();
+        console.log('[EMBARCADORES] Dados:', data.length, 'empresas');
+        if (Array.isArray(data)) {
+          setEmbarcadores(data.map((e: any) => ({ id: e.id, razao_social: e.razao_social })));
         }
-
-        const lista = (data as any[])?.map((e) => ({ id: e.id, razao_social: e.razao_social })) ?? [];
-        console.log('Lista de embarcadores processada:', lista);
-        setEmbarcadores(lista);
-      } catch (err) {
-        console.error('Erro ao carregar embarcadores:', err);
+      } catch (err: any) {
+        console.error('[EMBARCADORES] Erro:', err);
       }
     }
 
@@ -171,10 +194,13 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
   async function handleCepOrigemChange(valor: string) {
     const cepLimpo = valor.replace(/\D/g, '').slice(0, 8);
     handleChange('origem_cep', cepLimpo);
+    console.log('[CEP ORIGEM] valor:', valor, '-> limpo:', cepLimpo, 'len:', cepLimpo.length);
 
     if (cepLimpo.length === 8) {
+      console.log('[CEP ORIGEM] Buscando CEP:', cepLimpo);
       setBuscandoCepOrigem(true);
       const endereco = await buscarEnderecoPorCep(cepLimpo);
+      console.log('[CEP ORIGEM] Resultado:', endereco);
       setBuscandoCepOrigem(false);
 
       if (endereco) {
@@ -194,8 +220,10 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
   async function handleCepDestinoChange(valor: string) {
     const cepLimpo = valor.replace(/\D/g, '').slice(0, 8);
     handleChange('destino_cep', cepLimpo);
+    console.log('[CEP DESTINO] valor:', valor, '-> limpo:', cepLimpo, 'len:', cepLimpo.length);
 
     if (cepLimpo.length === 8) {
+      console.log('[CEP DESTINO] Buscando CEP:', cepLimpo);
       setBuscandoCepDestino(true);
       const endereco = await buscarEnderecoPorCep(cepLimpo);
       setBuscandoCepDestino(false);
@@ -217,6 +245,13 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     console.log('[CARGA] handleSubmit INICIO');
+
+    // Timeout de segurança: se travar por 20s, desbloqueia o formulário
+    const safetyTimeout = setTimeout(() => {
+      console.error('[CARGA] SAFETY TIMEOUT - desbloqueando formulário');
+      setLoading(false);
+      setError('O cadastro demorou demais. Verifique se a carga foi criada e tente novamente.');
+    }, 20000);
     
     try {
       setLoading(true);
@@ -277,19 +312,72 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
 
       console.log('[CARGA] embarcador_id:', formData.embarcador_id || embarcadorId);
 
+      // Geocodificar origem e destino para obter coordenadas
+      // Usar endereço completo (logradouro + número + bairro) para maior precisão
+      let origemLat: number | null = null;
+      let origemLng: number | null = null;
+      let destinoLat: number | null = null;
+      let destinoLng: number | null = null;
+      let distanciaTotalKm: number | null = null;
+
+      const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
+
+      async function geocodeEndereco(logradouro?: string, numero?: string, bairro?: string, cidade?: string, uf?: string): Promise<{ lat: number; lng: number }> {
+        // Montar query com o máximo de detalhe possível
+        const partes = [logradouro, numero, bairro, cidade, uf, 'Brasil'].filter(Boolean);
+        const query = partes.join(', ');
+        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?country=BR&limit=1&access_token=${MAPBOX_TOKEN}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.features?.length) {
+          const [lng, lat] = data.features[0].center;
+          return { lat, lng };
+        }
+        throw new Error(`Geocoding falhou para: ${query}`);
+      }
+
+      try {
+        const [origemGeo, destinoGeo] = await Promise.all([
+          geocodeEndereco(formData.origem_logradouro, formData.origem_numero, formData.origem_bairro, formData.origem_cidade, formData.origem_uf),
+          geocodeEndereco(formData.destino_logradouro, formData.destino_numero, formData.destino_bairro, formData.destino_cidade, formData.destino_uf)
+        ]);
+        origemLat = origemGeo.lat;
+        origemLng = origemGeo.lng;
+        destinoLat = destinoGeo.lat;
+        destinoLng = destinoGeo.lng;
+        distanciaTotalKm = calcularDistanciaTotal(origemLat, origemLng, destinoLat, destinoLng);
+        console.log('[CARGA] Geocoding OK - distância:', distanciaTotalKm, 'km');
+      } catch (geoErr) {
+        console.warn('[CARGA] Geocoding endereço falhou, tentando por cidade:', geoErr);
+        // Fallback: geocodificar apenas por cidade/UF
+        try {
+          const [origemGeo, destinoGeo] = await Promise.all([
+            geocodeCidadeUf({ cidade: formData.origem_cidade, uf: formData.origem_uf }),
+            geocodeCidadeUf({ cidade: formData.destino_cidade, uf: formData.destino_uf })
+          ]);
+          origemLat = origemGeo.lat;
+          origemLng = origemGeo.lng;
+          destinoLat = destinoGeo.lat;
+          destinoLng = destinoGeo.lng;
+          distanciaTotalKm = calcularDistanciaTotal(origemLat, origemLng, destinoLat, destinoLng);
+        } catch (fallbackErr) {
+          console.warn('[CARGA] Geocoding fallback falhou:', fallbackErr);
+        }
+      }
+
       const dadosParaInserir = {
         embarcador_id: formData.embarcador_id || embarcadorId,
         nota_fiscal: formData.nota_fiscal,
         origem_cidade: formData.origem_cidade,
         origem_uf: formData.origem_uf,
         origem_bairro: formData.origem_bairro || null,
-        origem_lat: null,
-        origem_lng: null,
+        origem_lat: origemLat,
+        origem_lng: origemLng,
         destino_cidade: formData.destino_cidade,
         destino_uf: formData.destino_uf,
         destino_bairro: formData.destino_bairro || null,
-        destino_lat: null,
-        destino_lng: null,
+        destino_lat: destinoLat,
+        destino_lng: destinoLng,
         toneladas: formData.toneladas || 0,
         descricao: formData.descricao
           ? `[Tipo de carga: ${tipoCarga}] ${formData.descricao}`
@@ -299,7 +387,7 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
         motorista_nome: formData.motorista_nome || null,
         motorista_telefone: (telefoneParaWhatsapp || telefoneParaContato) || null,
         placa_veiculo: formData.placa_veiculo || null,
-        distancia_total_km: null,
+        distancia_total_km: distanciaTotalKm,
         status: 'em_transito' as const,
         status_prazo: 'no_prazo',
         velocidade_media_estimada: formData.velocidade_media_estimada || 60,
@@ -308,93 +396,77 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
 
       console.log('[CARGA] Antes do insert via fetch');
 
-      const session = (await supabase.auth.getSession()).data.session;
-      if (!session) throw new Error('Usuário não autenticado');
+      const token = getAccessTokenSync();
+      if (!token) throw new Error('Usuário não autenticado');
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const authHeaders = {
+        'Content-Type': 'application/json',
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${token}`
+      };
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-
+      console.log('[CARGA] Enviando insert...');
       const insertResponse = await fetch(`${supabaseUrl}/rest/v1/cargas`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${session.access_token}`,
-          'Prefer': 'return=representation'
-        },
-        body: JSON.stringify(dadosParaInserir),
-        signal: controller.signal
+        headers: { ...authHeaders, 'Prefer': 'return=representation' },
+        body: JSON.stringify(dadosParaInserir)
       });
 
-      clearTimeout(timeoutId);
-
-      console.log('[CARGA] Insert response status:', insertResponse.status);
+      console.log('[CARGA] Insert status:', insertResponse.status);
 
       if (!insertResponse.ok) {
         const errBody = await insertResponse.text();
-        console.error('[CARGA] Insert error body:', errBody);
+        console.error('[CARGA] Insert error:', errBody);
         throw new Error(`Erro ao cadastrar carga: ${insertResponse.status} - ${errBody}`);
       }
 
       const insertedRows = await insertResponse.json();
       const carga = (Array.isArray(insertedRows) ? insertedRows[0] : insertedRows) as Carga;
-
       console.log('[CARGA] Carga criada:', carga.id);
 
+      // Registrar histórico (fire-and-forget)
       fetch(`${supabaseUrl}/rest/v1/historico_status`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${session.access_token}`
-        },
+        headers: authHeaders,
         body: JSON.stringify({
           carga_id: carga.id, status_novo: 'em_transito', observacao: 'Carga criada'
         })
-      }).catch(err => console.error('Erro ao registrar histórico:', err));
+      }).catch(() => {});
 
       // Se tem telefone do motorista, gerar link de rastreamento
       if (telefoneParaWhatsapp || telefoneParaContato) {
+        console.log('[CARGA] Gerando link rastreamento...');
         try {
-          const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Timeout ao gerar link')), 10000)
+          const linkRastreamento = await rastreamentoService.gerarLinkRastreamento(
+            carga.id,
+            (telefoneParaWhatsapp || telefoneParaContato),
+            token
           );
+          console.log('[CARGA] Link gerado:', linkRastreamento);
 
-          const linkRastreamento = await Promise.race([
-            rastreamentoService.gerarLinkRastreamento(
-              carga.id,
-              (telefoneParaWhatsapp || telefoneParaContato)
-            ),
-            timeoutPromise
-          ]);
-
-          const mensagem = rastreamentoService.gerarMensagemCompartilhamento(linkRastreamento);
+          const mensagem = rastreamentoService.gerarMensagemCompartilhamento(linkRastreamento, formData.motorista_nome || undefined);
           const whatsappUrl = telefoneParaWhatsapp
             ? rastreamentoService.gerarUrlWhatsApp(telefoneParaWhatsapp, mensagem)
             : rastreamentoService.gerarUrlWhatsApp(telefoneParaContato, mensagem);
           const smsUrl = rastreamentoService.gerarUrlSms(telefoneParaContato || telefoneParaWhatsapp, mensagem);
 
-          setEnvioAssistido({
-            linkRastreamento,
-            whatsappUrl,
-            smsUrl
-          });
+          clearTimeout(safetyTimeout);
+          setLoading(false);
+          setEnvioAssistido({ linkRastreamento, whatsappUrl, smsUrl });
+          return;
         } catch (linkErr) {
-          console.warn('Falha ao gerar link de rastreamento:', linkErr);
-          alert('Carga cadastrada com sucesso! (Link de rastreamento não pôde ser gerado)');
-          onSuccess?.();
+          console.warn('[CARGA] Falha ao gerar link:', linkErr);
         }
-
-        return;
       }
 
+      clearTimeout(safetyTimeout);
       alert('Carga cadastrada com sucesso!');
       onSuccess?.();
     } catch (err: any) {
-      console.error('Erro ao criar carga:', err);
+      clearTimeout(safetyTimeout);
+      console.error('[CARGA] Erro:', err);
       setError(err.message || 'Erro ao cadastrar carga');
     } finally {
       setLoading(false);

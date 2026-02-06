@@ -39,40 +39,52 @@ class RastreamentoService {
    * Gera link único para motorista compartilhar localização
    * Este link pode ser via WhatsApp ou SMS
    */
-  async gerarLinkRastreamento(cargaId: string, telefoneMotorista: string): Promise<string> {
+  async gerarLinkRastreamento(cargaId: string, telefoneMotorista: string, accessToken?: string): Promise<string> {
+    // Gerar token único
+    const token = this.gerarToken();
+    
+    // URL base para compartilhamento
+    const publicAppUrl = (import.meta.env.VITE_PUBLIC_APP_URL || '').trim();
+    const origin = publicAppUrl && /^https?:\/\//i.test(publicAppUrl)
+      ? publicAppUrl.replace(/\/+$/, '')
+      : window.location.origin;
+
+    const baseUrl = `${origin}/rastreamento`;
+    const linkRastreamento = `${baseUrl}/${token}`;
+
+    // Salvar token no banco via fetch direto (aguardar para garantir que o link exista quando o motorista abrir)
     try {
-      // Gerar token único
-      const token = this.gerarToken();
-      
-      // URL base para compartilhamento
-      const publicAppUrl = (import.meta.env.VITE_PUBLIC_APP_URL || '').trim();
-      const origin = publicAppUrl && /^https?:\/\//i.test(publicAppUrl)
-        ? publicAppUrl.replace(/\/+$/, '')
-        : window.location.origin;
+      let tkn = accessToken;
+      if (!tkn) {
+        const session = (await supabase.auth.getSession()).data.session;
+        tkn = session?.access_token;
+      }
+      if (tkn) {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-      const baseUrl = `${origin}/rastreamento`;
-      const linkRastreamento = `${baseUrl}/${token}`;
-
-      // Salvar token no banco relacionado à carga
-      const { error } = await supabase
-        .from('cargas')
-        .update({
-          link_rastreamento: token,
-        })
-        .eq('id', cargaId);
-
-      if (error) throw error;
-
-      return linkRastreamento;
-    } catch (error) {
-      console.error('Erro ao gerar link de rastreamento:', error);
-      throw error;
+        const patchRes = await fetch(`${supabaseUrl}/rest/v1/cargas?id=eq.${cargaId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${tkn}`
+          },
+          body: JSON.stringify({ link_rastreamento: token })
+        });
+        console.log('[RASTREAMENTO] PATCH link_rastreamento status:', patchRes.status);
+      }
+    } catch (err) {
+      console.error('Erro ao salvar link_rastreamento:', err);
     }
+
+    return linkRastreamento;
   }
 
-  gerarMensagemCompartilhamento(linkRastreamento: string): string {
-    return `Olá! �
-      
+  gerarMensagemCompartilhamento(linkRastreamento: string, motoristaNome?: string): string {
+    const saudacao = motoristaNome ? `Olá, ${motoristaNome}!` : 'Olá!';
+    return `${saudacao}
+
 Para que possamos rastrear sua carga em tempo real, por favor clique no link abaixo e permita o acesso à sua localização:
 
 ${linkRastreamento}
@@ -97,24 +109,29 @@ BratCargas`;
    * Captura localização do motorista via navegador
    * Esta função roda no lado do motorista quando ele abre o link
    */
-  async capturarLocalizacaoMotorista(token: string): Promise<void> {
+  async capturarLocalizacaoMotorista(token: string): Promise<string> {
     if (!navigator.geolocation) {
       throw new Error('Geolocalização não suportada neste dispositivo');
     }
 
-    // Buscar carga pelo token
-    const { data: carga, error } = await supabase
-      .from('cargas')
-      .select('id')
-      .eq('link_rastreamento', token)
-      .single<{ id: string }>();
+    // Buscar carga pelo token via REST (página pública, sem auth do usuário)
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-    if (error || !carga) {
-      throw new Error('Token de rastreamento inválido');
-    }
+    const response = await fetch(
+      `${supabaseUrl}/rest/v1/cargas?link_rastreamento=eq.${token}&select=id&limit=1`,
+      { headers: { 'apikey': supabaseKey } }
+    );
+
+    if (!response.ok) throw new Error('Erro ao buscar carga');
+    const rows = await response.json();
+    if (!rows?.length) throw new Error('Token de rastreamento inválido');
+
+    const cargaId = rows[0].id;
 
     // Iniciar rastreamento contínuo
-    this.iniciarRastreamentoContinuo(carga.id, token);
+    this.iniciarRastreamentoContinuo(cargaId, token);
+    return cargaId;
   }
 
   /**
@@ -138,30 +155,36 @@ BratCargas`;
   /**
    * Captura posição atual e salva no banco
    */
-  private async capturarPosicao(cargaId: string): Promise<void> {
+  private async capturarPosicao(cargaId: string): Promise<{ latitude: number; longitude: number } | null> {
     try {
       const posicao = await this.obterPosicaoAtual();
 
-      // Salvar no banco
-      const { error } = await supabase
-        .from('posicoes_gps')
-        .insert([
-          {
-            carga_id: cargaId,
-            latitude: posicao.latitude,
-            longitude: posicao.longitude,
-            velocidade: posicao.velocidade,
-            precisao_metros: posicao.precisao,
-            origem: 'api_rastreamento',
-            timestamp: new Date().toISOString()
-          }
-        ]);
+      // Salvar no banco via REST (página pública)
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-      if (error) throw error;
+      fetch(`${supabaseUrl}/rest/v1/posicoes_gps`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': supabaseKey
+        },
+        body: JSON.stringify({
+          carga_id: cargaId,
+          latitude: posicao.latitude,
+          longitude: posicao.longitude,
+          velocidade: posicao.velocidade,
+          precisao_metros: posicao.precisao,
+          origem: 'api_rastreamento',
+          timestamp: new Date().toISOString()
+        })
+      }).catch(err => console.error('Erro ao salvar posição:', err));
 
-      console.log('Posição salva com sucesso:', posicao);
+      console.log('Posição capturada:', posicao.latitude, posicao.longitude);
+      return { latitude: posicao.latitude, longitude: posicao.longitude };
     } catch (error) {
       console.error('Erro ao capturar posição:', error);
+      return null;
     }
   }
 

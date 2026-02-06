@@ -59,24 +59,29 @@ export function calcularStatusPrazo(
     return 'no_prazo'; // Sem dados de posição ainda
   }
   
-  // Calcular distância percorrida
-  const distanciaPercorrida = calcularDistancia(
-    carga.origem_lat,
-    carga.origem_lng,
-    ultimaPosicao.latitude,
-    ultimaPosicao.longitude
-  );
-  
-  // Calcular distância restante
-  const distanciaRestante = carga.destino_lat && carga.destino_lng ? calcularDistancia(
-    ultimaPosicao.latitude,
-    ultimaPosicao.longitude,
-    carga.destino_lat,
-    carga.destino_lng
-  ) : 0;
-  
-  // Percentual percorrido
-  const percentualPercorrido = (distanciaPercorrida / carga.distancia_total_km) * 100;
+  // Calcular distância restante (motorista → destino)
+  const distanciaRestante = (carga.destino_lat && carga.destino_lng)
+    ? calcularDistancia(
+        ultimaPosicao.latitude,
+        ultimaPosicao.longitude,
+        carga.destino_lat,
+        carga.destino_lng
+      )
+    : 0;
+
+  // Distância total da rota
+  const distanciaOrigemDestino = (carga.origem_lat && carga.origem_lng && carga.destino_lat && carga.destino_lng)
+    ? calcularDistancia(carga.origem_lat, carga.origem_lng, carga.destino_lat, carga.destino_lng)
+    : 0;
+  const distTotal = (carga.distancia_total_km && carga.distancia_total_km > 0)
+    ? carga.distancia_total_km
+    : distanciaOrigemDestino;
+
+  // Percentual baseado na distância restante: progresso = 1 - (restante / total)
+  let percentualPercorrido = 0;
+  if (distTotal > 0) {
+    percentualPercorrido = Math.max(0, ((distTotal - distanciaRestante) / distTotal) * 100);
+  }
   
   // Calcular tempo decorrido e total
   const agora = new Date();
@@ -199,47 +204,63 @@ export function calcularProgressoEntrega(
   carga: Carga,
   ultimaPosicao?: PosicaoGPS
 ): ProgressoEntrega {
-  if (!ultimaPosicao) {
-    return {
-      percentualPercorrido: 0,
-      percentualTempo: 0,
-      distanciaPercorrida: 0,
-      distanciaRestante: carga.distancia_total_km,
-      tempoDecorrido: '0h 0min',
-      tempoRestante: formatarTempo(carga.prazo_entrega),
-      status: 'no_prazo'
-    };
-  }
-  
-  const distanciaPercorrida = calcularDistancia(
-    carga.origem_lat,
-    carga.origem_lng,
-    ultimaPosicao.latitude,
-    ultimaPosicao.longitude
-  );
-  
-  const distanciaRestante = calcularDistancia(
-    ultimaPosicao.latitude,
-    ultimaPosicao.longitude,
-    carga.destino_lat,
-    carga.destino_lng
-  );
-  
-  const percentualPercorrido = (distanciaPercorrida / carga.distancia_total_km) * 100;
-  
   const agora = new Date();
   const dataCarregamento = new Date(carga.data_carregamento);
   const prazoEntrega = new Date(carga.prazo_entrega);
-  
-  const tempoDecorridoMs = agora.getTime() - dataCarregamento.getTime();
-  const tempoTotalMs = prazoEntrega.getTime() - dataCarregamento.getTime();
-  const tempoRestanteMs = prazoEntrega.getTime() - agora.getTime();
-  
-  const percentualTempo = (tempoDecorridoMs / tempoTotalMs) * 100;
-  
+  const tempoDecorridoMs = Math.max(0, agora.getTime() - dataCarregamento.getTime());
+  const tempoTotalMs = Math.max(1, prazoEntrega.getTime() - dataCarregamento.getTime());
+  const tempoRestanteMs = Math.max(0, prazoEntrega.getTime() - agora.getTime());
+  const percentualTempo = Math.min(100, Math.round((tempoDecorridoMs / tempoTotalMs) * 100));
+
+  // Sem posição GPS → progresso 0%
+  if (!ultimaPosicao) {
+    return {
+      percentualPercorrido: 0,
+      percentualTempo,
+      distanciaPercorrida: 0,
+      distanciaRestante: carga.distancia_total_km || 0,
+      tempoDecorrido: formatarDuracao(tempoDecorridoMs),
+      tempoRestante: formatarDuracao(tempoRestanteMs),
+      status: 'no_prazo'
+    };
+  }
+
+  // Calcular distância restante (motorista → destino)
+  const distanciaRestante = (carga.destino_lat && carga.destino_lng)
+    ? calcularDistancia(
+        ultimaPosicao.latitude,
+        ultimaPosicao.longitude,
+        carga.destino_lat,
+        carga.destino_lng
+      )
+    : 0;
+
+  // Distância total da rota (origem → destino)
+  const distanciaOrigemDestino = (carga.origem_lat && carga.origem_lng && carga.destino_lat && carga.destino_lng)
+    ? calcularDistancia(carga.origem_lat, carga.origem_lng, carga.destino_lat, carga.destino_lng)
+    : 0;
+
+  // Usar distancia_total_km do banco se disponível, senão calcular em linha reta
+  const distTotal = (carga.distancia_total_km && carga.distancia_total_km > 0)
+    ? carga.distancia_total_km
+    : distanciaOrigemDestino;
+
+  // Distância percorrida = total - restante
+  const distanciaPercorrida = Math.max(0, distTotal - distanciaRestante);
+
+  // Calcular percentual baseado na distância restante
+  // progresso = 1 - (restante / total) — mais preciso que percorrida/total
+  let percentualPercorrido = 0;
+  if (distTotal > 0) {
+    percentualPercorrido = ((distTotal - distanciaRestante) / distTotal) * 100;
+  }
+
+  // Clamp entre 0 e 100
+  percentualPercorrido = Math.min(100, Math.max(0, Math.round(percentualPercorrido)));
+
   return {
-    percentualPercorrido: Math.min(100, Math.round(percentualPercorrido)),
-    percentualTempo: Math.min(100, Math.round(percentualTempo)),
+    percentualPercorrido,
+    percentualTempo,
     distanciaPercorrida: Math.round(distanciaPercorrida),
     distanciaRestante: Math.round(distanciaRestante),
     tempoDecorrido: formatarDuracao(tempoDecorridoMs),

@@ -36,13 +36,16 @@ export async function buscarEnderecoPorCep(cep: string): Promise<EnderecoViaCep 
   }
 
   try {
+    console.log('[VIACEP] Buscando:', cepLimpo);
     const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+    console.log('[VIACEP] Status:', response.status);
     
     if (!response.ok) {
       throw new Error('Erro na requisição');
     }
 
     const data: ViaCepResponse = await response.json();
+    console.log('[VIACEP] Data:', data);
 
     if (data.erro) {
       cache[cepLimpo] = null;

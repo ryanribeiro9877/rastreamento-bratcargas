@@ -28,6 +28,7 @@ export default function MapaRastreamento({
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
   const routeRef = useRef<L.Polyline | null>(null);
   const routeRequestIdRef = useRef(0);
+  const destinoMarkerRef = useRef<L.Marker | null>(null);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [cargaSelecionadaId, setCargaSelecionadaId] = useState<string | null>(null);
 
@@ -65,6 +66,10 @@ export default function MapaRastreamento({
         routeRef.current.remove();
         routeRef.current = null;
       }
+      if (destinoMarkerRef.current) {
+        destinoMarkerRef.current.remove();
+        destinoMarkerRef.current = null;
+      }
       return;
     }
 
@@ -86,19 +91,43 @@ export default function MapaRastreamento({
     getMapboxRoute({ from: origem, to: destino, profile: 'driving' })
       .then((route) => {
         if (requestId !== routeRequestIdRef.current) return;
-
         if (!mapRef.current) return;
 
+        // Limpar rota e marcador de destino anteriores
         if (routeRef.current) {
           routeRef.current.remove();
           routeRef.current = null;
         }
+        if (destinoMarkerRef.current) {
+          destinoMarkerRef.current.remove();
+          destinoMarkerRef.current = null;
+        }
 
+        // Desenhar rota (azul)
         routeRef.current = L.polyline(route.coordinatesLatLng, {
           color: '#2563eb',
-          weight: 4,
-          opacity: 0.9
+          weight: 5,
+          opacity: 0.8,
+          smoothFactor: 1
         }).addTo(mapRef.current);
+
+        // Marcador do destino (vermelho)
+        const destinoIcon = L.divIcon({
+          className: '',
+          html: `<div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="#EF4444" stroke="white" stroke-width="1.5">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+              <circle cx="12" cy="10" r="3" fill="white"/>
+            </svg>
+          </div>`,
+          iconSize: [32, 32],
+          iconAnchor: [16, 32],
+          popupAnchor: [0, -32]
+        });
+
+        destinoMarkerRef.current = L.marker([destino.lat, destino.lng], { icon: destinoIcon })
+          .addTo(mapRef.current)
+          .bindPopup(`<strong>Destino:</strong> ${cargaSelecionada.destino_cidade}/${cargaSelecionada.destino_uf}`);
 
         mapRef.current.fitBounds(routeRef.current.getBounds(), { padding: [50, 50] });
       })
@@ -122,8 +151,10 @@ export default function MapaRastreamento({
       const posicao = carga.ultima_posicao;
       
       if (!posicao) {
-        // Se não tem posição, mostrar na origem
-        adicionarMarcador(map, carga, carga.origem_lat, carga.origem_lng, true);
+        // Se não tem posição, mostrar na origem (se tiver coordenadas)
+        if (carga.origem_lat != null && carga.origem_lng != null) {
+          adicionarMarcador(map, carga, carga.origem_lat, carga.origem_lng, true);
+        }
         return;
       }
 
@@ -133,17 +164,18 @@ export default function MapaRastreamento({
 
     // Ajustar zoom para mostrar todos os marcadores
     if (!cargaSelecionadaId && cargas.length > 0) {
-      const bounds = L.latLngBounds(
-        cargas
-          .filter(c => c.ultima_posicao || (c.origem_lat && c.origem_lng))
-          .map(c => {
-            if (c.ultima_posicao) {
-              return [c.ultima_posicao.latitude, c.ultima_posicao.longitude] as [number, number];
-            }
-            return [c.origem_lat, c.origem_lng] as [number, number];
-          })
-      );
-      map.fitBounds(bounds, { padding: [50, 50] });
+      const pontos = cargas
+        .filter(c => c.ultima_posicao || (c.origem_lat != null && c.origem_lng != null))
+        .map(c => {
+          if (c.ultima_posicao) {
+            return [c.ultima_posicao.latitude, c.ultima_posicao.longitude] as [number, number];
+          }
+          return [c.origem_lat ?? 0, c.origem_lng ?? 0] as [number, number];
+        });
+      if (pontos.length > 0) {
+        const bounds = L.latLngBounds(pontos);
+        map.fitBounds(bounds, { padding: [50, 50] });
+      }
     }
   }, [cargas, lastUpdate, cargaSelecionadaId]);
 

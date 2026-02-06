@@ -1,6 +1,7 @@
 // components/Dashboard/CooperativaDashboard.tsx - Dashboard da Cooperativa (COMPLETO)
 
 import { useState } from 'react';
+import { supabase } from '../../services/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useCargas, useMetricasDashboard } from '../../hooks/useCargas';
 import { useRealtimeCargas } from '../../hooks/useRealtime';
@@ -37,6 +38,7 @@ export default function CooperativaDashboard() {
   const [showCargas, setShowCargas] = useState(false);
   const [showEmpresas, setShowEmpresas] = useState(false);
   const [showConfiguracoes, setShowConfiguracoes] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const isDark = false; // Tema fixo claro
   const tema = 'claro' as const; // Tema fixo claro
 
@@ -46,7 +48,17 @@ export default function CooperativaDashboard() {
   // Realtime - atualizar quando qualquer carga mudar
   useRealtimeCargas(undefined, () => {
     refetch();
+    refetchMetricas();
   });
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      await Promise.all([refetch(), refetchMetricas()]);
+    } finally {
+      setTimeout(() => setRefreshing(false), 600);
+    }
+  }
 
   async function handleMarcarEntregue(cargaId: string) {
     if (!confirm('Confirma que a carga foi entregue?')) return;
@@ -70,6 +82,39 @@ export default function CooperativaDashboard() {
       setCargaSelecionada(null);
     } catch (error) {
       alert('Erro ao excluir carga');
+    }
+  }
+
+  // TEMPORÁRIO: Limpar cargas inativas do banco
+  async function handleLimparCargasInativas() {
+    if (!confirm('Isso vai excluir PERMANENTEMENTE todas as cargas inativas do banco. Continuar?')) return;
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      if (!session) { alert('Não autenticado'); return; }
+      const url = import.meta.env.VITE_SUPABASE_URL;
+      const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const h = { 'apikey': key, 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' };
+
+      const r = await fetch(`${url}/rest/v1/cargas?select=id,nota_fiscal&ativo=eq.false`, { headers: h });
+      const inativas = await r.json();
+
+      if (!Array.isArray(inativas) || inativas.length === 0) {
+        alert('Nenhuma carga inativa encontrada.');
+        return;
+      }
+
+      for (const c of inativas) {
+        await fetch(`${url}/rest/v1/alertas?carga_id=eq.${c.id}`, { method: 'DELETE', headers: h });
+        await fetch(`${url}/rest/v1/posicoes_gps?carga_id=eq.${c.id}`, { method: 'DELETE', headers: h });
+        await fetch(`${url}/rest/v1/historico_status?carga_id=eq.${c.id}`, { method: 'DELETE', headers: h });
+        await fetch(`${url}/rest/v1/cargas?id=eq.${c.id}`, { method: 'DELETE', headers: h });
+      }
+
+      alert(`${inativas.length} carga(s) inativa(s) removida(s) com sucesso!`);
+      refetch();
+      refetchMetricas();
+    } catch (err) {
+      alert('Erro ao limpar cargas: ' + (err instanceof Error ? err.message : String(err)));
     }
   }
 
@@ -288,13 +333,20 @@ export default function CooperativaDashboard() {
           </div>
 
           <button
-            onClick={refetch}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-lg shadow-sm hover:bg-gray-50 transition"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-lg shadow-sm hover:bg-gray-50 transition disabled:opacity-50"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className={`w-4 h-4 transition-transform ${refreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            Atualizar
+            {refreshing ? 'Atualizando...' : 'Atualizar'}
+          </button>
+          <button
+            onClick={handleLimparCargasInativas}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-700 bg-red-50 rounded-lg shadow-sm hover:bg-red-100 transition"
+          >
+            🗑 Limpar Inativas
           </button>
         </div>
       </div>
@@ -455,6 +507,7 @@ export default function CooperativaDashboard() {
               onSuccess={() => {
                 setShowCadastro(false);
                 refetch();
+                refetchMetricas();
               }}
               onCancel={() => setShowCadastro(false)}
             />
