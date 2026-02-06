@@ -63,13 +63,36 @@ export default function EmpresasModal({ onClose }: EmpresasModalProps) {
       // Primeiro excluir as cargas da empresa
       await supabase.from('cargas').delete().eq('embarcador_id', empresaId);
       
-      // Depois excluir os perfis de usuário associados
+      // Buscar usuarios vinculados antes de excluir
+      const { data: usuarios } = await supabase
+        .from('usuarios_embarcadores')
+        .select('user_id')
+        .eq('embarcador_id', empresaId);
+
+      // Excluir vínculos de usuários
+      await supabase.from('usuarios_embarcadores').delete().eq('embarcador_id', empresaId);
+
+      // Excluir os perfis de usuário associados
       await supabase.from('profiles').delete().eq('embarcador_id', empresaId);
       
       // Por fim, excluir a empresa
       const { error } = await supabase.from('embarcadores').delete().eq('id', empresaId);
       
       if (error) throw error;
+
+      // Excluir usuários do Auth via Edge Function (se houver)
+      if (usuarios && usuarios.length > 0) {
+        for (const u of usuarios) {
+          fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/excluir-usuario-auth`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            },
+            body: JSON.stringify({ user_id: u.user_id }),
+          }).catch(() => {});
+        }
+      }
       
       alert('Empresa excluída com sucesso!');
       setEmpresaSelecionada(null);

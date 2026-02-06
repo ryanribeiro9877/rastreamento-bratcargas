@@ -522,6 +522,7 @@ export default function CooperativaDashboard() {
             <EmpresaForm
               onSuccess={() => {
                 setShowCadastroEmpresa(false);
+                setShowEmpresas(true);
               }}
               onCancel={() => setShowCadastroEmpresa(false)}
             />

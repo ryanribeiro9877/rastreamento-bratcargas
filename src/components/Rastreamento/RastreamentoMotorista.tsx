@@ -34,6 +34,9 @@ export default function RastreamentoMotorista() {
   const [autorizando, setAutorizando] = useState(false);
   const [posicaoAtual, setPosicaoAtual] = useState<{ lat: number; lng: number } | null>(null);
   const [ultimaAtualizacao, setUltimaAtualizacao] = useState<Date | null>(null);
+  const [entregue, setEntregue] = useState(false);
+  const [confirmandoEntrega, setConfirmandoEntrega] = useState(false);
+  const entregueRef = useRef(false);
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -42,6 +45,61 @@ export default function RastreamentoMotorista() {
   const watchIdRef = useRef<number | null>(null);
   const lastRouteUpdateRef = useRef<number>(0);
   const ROUTE_UPDATE_INTERVAL = 30000; // Atualizar rota a cada 30s (estilo Uber/iFood)
+
+  // Calcular distância entre dois pontos (Haversine)
+  function calcularDistanciaLocal(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  // Marcar carga como entregue no banco
+  async function confirmarEntrega() {
+    if (!carga || entregueRef.current) return;
+    entregueRef.current = true;
+    setConfirmandoEntrega(true);
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/cargas?id=eq.${carga.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          status: 'entregue',
+          data_entrega_real: new Date().toISOString()
+        })
+      });
+      setEntregue(true);
+      // Parar rastreamento GPS
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    } catch (err) {
+      console.error('Erro ao confirmar entrega:', err);
+      entregueRef.current = false;
+    } finally {
+      setConfirmandoEntrega(false);
+    }
+  }
+
+  // Verificar proximidade do destino para entrega automática
+  function verificarChegadaDestino(lat: number, lng: number) {
+    if (!carga || entregueRef.current) return;
+    const destLat = carga.destino_lat;
+    const destLng = carga.destino_lng;
+    if (!destLat || !destLng) return;
+    const distancia = calcularDistanciaLocal(lat, lng, destLat, destLng);
+    if (distancia <= 1) {
+      // Motorista a menos de 1km do destino — marcar como entregue
+      confirmarEntrega();
+    }
+  }
 
   // Buscar carga pelo token (público, sem auth)
   useEffect(() => {
@@ -316,6 +374,9 @@ export default function RastreamentoMotorista() {
           setUltimaAtualizacao(new Date());
           atualizarPosicaoNoMapa(newLatLng.lat, newLatLng.lng);
 
+          // Verificar se chegou ao destino
+          verificarChegadaDestino(newLatLng.lat, newLatLng.lng);
+
           // Salvar no banco (a cada atualização)
           fetch(`${SUPABASE_URL}/rest/v1/posicoes_gps`, {
             method: 'POST',
@@ -455,9 +516,40 @@ export default function RastreamentoMotorista() {
             </div>
           </div>
 
+          {/* Botão Confirmar Entrega */}
+          {!entregue ? (
+            <button
+              onClick={confirmarEntrega}
+              disabled={confirmandoEntrega}
+              className="w-full mt-3 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-bold rounded-xl transition shadow-lg flex items-center justify-center gap-2"
+            >
+              {confirmandoEntrega ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                  Confirmando...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Confirmar Entrega
+                </>
+              )}
+            </button>
+          ) : (
+            <div className="mt-3 bg-green-50 border border-green-200 rounded-xl p-3 text-center">
+              <svg className="w-8 h-8 text-green-600 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-green-800 font-bold text-sm">Entrega Confirmada!</p>
+              <p className="text-green-600 text-xs">Obrigado pelo seu trabalho!</p>
+            </div>
+          )}
+
           {/* Última atualização */}
           {ultimaAtualizacao && (
-            <div className="text-center text-[10px] text-gray-400">
+            <div className="text-center text-[10px] text-gray-400 mt-2">
               Última atualização: {ultimaAtualizacao.toLocaleTimeString('pt-BR')}
             </div>
           )}

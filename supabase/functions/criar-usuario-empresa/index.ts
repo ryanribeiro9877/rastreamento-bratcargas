@@ -25,6 +25,7 @@ async function enviarEmailCredenciais(
   resendApiKey: string
 ): Promise<boolean> {
   try {
+    console.log('[EMAIL] Tentando enviar email para:', email, 'com key:', resendApiKey?.substring(0, 8) + '...');
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -32,7 +33,7 @@ async function enviarEmailCredenciais(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'BratCargas <onboarding@resend.dev>',
+        from: 'BratCargas <operacional@rastreamentobrat.com.br>',
         to: [email],
         subject: 'Bem-vindo ao BratCargas - Suas credenciais de acesso',
         html: `
@@ -105,9 +106,11 @@ async function enviarEmailCredenciais(
         `,
       }),
     });
+    const responseBody = await response.text();
+    console.log('[EMAIL] Resend response status:', response.status, 'body:', responseBody);
     return response.ok;
   } catch (error) {
-    console.error('Erro ao enviar email:', error);
+    console.error('[EMAIL] Erro ao enviar email:', error);
     return false;
   }
 }
@@ -167,6 +170,9 @@ serve(async (req) => {
 
     const senhaGerada = gerarSenhaAleatoria(10);
 
+    let authUserId: string;
+
+    // Tentar criar usuario no Auth
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: emailContato,
       password: senhaGerada,
@@ -175,10 +181,44 @@ serve(async (req) => {
     });
 
     if (authError) {
-      return new Response(
-        JSON.stringify({ error: `Erro ao criar usuario: ${authError.message}` }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      // Se o email ja existe no Auth (empresa foi excluida mas auth ficou),
+      // deletar o usuario antigo e criar um novo
+      if (authError.message?.includes('already been registered')) {
+        const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
+        const existingUser = listData?.users?.find((u: any) => u.email === emailContato);
+        if (existingUser) {
+          // Limpar vinculo antigo se existir
+          await supabaseAdmin.from("usuarios_embarcadores").delete().eq("user_id", existingUser.id);
+          // Deletar usuario antigo do Auth
+          await supabaseAdmin.auth.admin.deleteUser(existingUser.id);
+          // Criar novo usuario com nova senha
+          const { data: newAuthData, error: newAuthError } = await supabaseAdmin.auth.admin.createUser({
+            email: emailContato,
+            password: senhaGerada,
+            email_confirm: true,
+            user_metadata: { tipo: 'embarcador', razao_social: razaoSocial },
+          });
+          if (newAuthError || !newAuthData?.user) {
+            return new Response(
+              JSON.stringify({ error: `Erro ao recriar usuario: ${newAuthError?.message || 'Erro desconhecido'}` }),
+              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+          authUserId = newAuthData.user.id;
+        } else {
+          return new Response(
+            JSON.stringify({ error: `Erro ao criar usuario: ${authError.message}` }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      } else {
+        return new Response(
+          JSON.stringify({ error: `Erro ao criar usuario: ${authError.message}` }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    } else {
+      authUserId = authData.user.id;
     }
 
     const { data: embarcador, error: embarcadorError } = await supabaseAdmin
@@ -193,7 +233,7 @@ serve(async (req) => {
       .single();
 
     if (embarcadorError) {
-      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      await supabaseAdmin.auth.admin.deleteUser(authUserId);
       return new Response(
         JSON.stringify({ error: `Erro ao criar empresa: ${embarcadorError.message}` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -203,7 +243,7 @@ serve(async (req) => {
     const { error: vinculoError } = await supabaseAdmin
       .from("usuarios_embarcadores")
       .insert({
-        user_id: authData.user.id,
+        user_id: authUserId,
         embarcador_id: embarcador.id,
         nome: razaoSocial,
         email: emailContato,
@@ -211,7 +251,7 @@ serve(async (req) => {
       });
 
     if (vinculoError) {
-      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      await supabaseAdmin.auth.admin.deleteUser(authUserId);
       await supabaseAdmin.from("embarcadores").delete().eq("id", embarcador.id);
       return new Response(
         JSON.stringify({ error: `Erro ao vincular usuario: ${vinculoError.message}` }),
@@ -220,8 +260,12 @@ serve(async (req) => {
     }
 
     let emailEnviado = false;
+    console.log('[EDGE] RESEND_API_KEY presente?', !!resendApiKey, resendApiKey ? resendApiKey.substring(0, 8) + '...' : 'VAZIO');
     if (resendApiKey) {
       emailEnviado = await enviarEmailCredenciais(emailContato, senhaGerada, razaoSocial, resendApiKey);
+      console.log('[EDGE] emailEnviado:', emailEnviado);
+    } else {
+      console.log('[EDGE] RESEND_API_KEY nao configurada, pulando envio de email');
     }
 
     return new Response(
@@ -229,7 +273,7 @@ serve(async (req) => {
         success: true,
         message: "Empresa e usuario criados com sucesso",
         embarcador: embarcador,
-        usuario: { id: authData.user.id, email: emailContato },
+        usuario: { id: authUserId, email: emailContato },
         senhaGerada: senhaGerada,
         emailEnviado: emailEnviado,
       }),
