@@ -168,9 +168,12 @@ function gerarEmailHTML(
               ` : ''}
             </div>
 
-            <p style="font-size: 13px; color: #9ca3af; text-align: center; margin-top: 24px;">
-              Acesse o sistema para mais detalhes sobre sua carga.
-            </p>
+            <div style="text-align: center; margin-top: 24px;">
+              <a href="https://rastreamentobratcargas.netlify.app/" style="display: inline-block; background: #2563eb; color: white; text-decoration: none; padding: 12px 32px; border-radius: 8px; font-size: 14px; font-weight: 600;">Acessar o Sistema</a>
+              <p style="font-size: 13px; color: #9ca3af; margin-top: 12px;">
+                Acesse o sistema para mais detalhes sobre sua carga.
+              </p>
+            </div>
           </div>
 
           <div class="footer">
