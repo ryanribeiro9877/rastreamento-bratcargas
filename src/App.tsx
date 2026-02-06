@@ -140,14 +140,13 @@ function App() {
 // Componente que redireciona para o dashboard correto baseado no tipo de usuário
 function DashboardRouter() {
   const { loading, isCooperativa, isEmbarcador, signOut } = useAuth();
-  const navigate = useNavigate();
 
   const semPermissao = !loading && !isCooperativa && !isEmbarcador;
 
   useEffect(() => {
     if (semPermissao) {
       signOut().finally(() => {
-        navigate('/login?erro=sem_permissao', { replace: true });
+        window.location.replace('/login?erro=sem_permissao');
       });
     }
   }, [semPermissao]);
