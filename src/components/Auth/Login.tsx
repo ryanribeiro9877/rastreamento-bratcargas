@@ -1,8 +1,8 @@
 // components/Auth/Login.tsx - Componente de Login
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 // Função para traduzir mensagens de erro do Supabase
 function traduzirErro(mensagem: string): string {
@@ -38,6 +38,14 @@ export default function Login() {
   
   const { signIn, resetPassword } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const erro = searchParams.get('erro');
+    if (erro === 'sem_permissao') {
+      setError('Seu usuário não tem permissão de acesso. Entre em contato com a cooperativa.');
+    }
+  }, [searchParams]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
