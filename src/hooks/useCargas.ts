@@ -1,9 +1,9 @@
 // hooks/useCargas.ts - Hook para gerenciar cargas
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import type { Carga, CargaFormData, FiltrosCargas, MetricasDashboard } from '../types';
-import { calcularDistanciaTotal } from '../utils/calculos';
+import { calcularDistanciaTotal, calcularStatusPrazo } from '../utils/calculos';
 
 // Helper: obter token de sessão do localStorage (instantâneo, sem await)
 function getAccessTokenSync(): string | null {
@@ -24,6 +24,8 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
   const [loading, setLoading] = useState(true);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const statusPrazoAnteriorRef = useRef<Record<string, string>>({});
+  const notificacoesEnviadasRef = useRef<Set<string>>(new Set());
 
   // Memorizar os filtros serializados para evitar loops infinitos
   const filtrosSerializados = useMemo(() => {
@@ -134,6 +136,39 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
       });
 
       setCargas(cargasProcessadas);
+
+      // Detectar mudanças de status_prazo e notificar empresa por email
+      const supabaseKeyForNotif = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      for (const c of cargasProcessadas) {
+        if (c.status !== 'em_transito') continue;
+        const statusPrazoCalculado = calcularStatusPrazo(c, c.ultima_posicao);
+        const statusAnterior = statusPrazoAnteriorRef.current[c.id] || c.status_prazo || 'no_prazo';
+        const chaveNotif = `${c.id}_${statusPrazoCalculado}`;
+
+        if (statusPrazoCalculado !== statusAnterior && !notificacoesEnviadasRef.current.has(chaveNotif)) {
+          notificacoesEnviadasRef.current.add(chaveNotif);
+          // Atualizar status_prazo no banco
+          fetch(`${supabaseUrl}/rest/v1/cargas?id=eq.${c.id}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': supabaseKey,
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ status_prazo: statusPrazoCalculado })
+          }).catch(() => {});
+          // Enviar notificação por email
+          fetch(`${supabaseUrl}/functions/v1/notificar-status-carga`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseKeyForNotif}`,
+            },
+            body: JSON.stringify({ carga_id: c.id, status: statusPrazoCalculado })
+          }).catch(() => {});
+        }
+        statusPrazoAnteriorRef.current[c.id] = statusPrazoCalculado;
+      }
     } catch (err) {
       console.error('Erro ao buscar cargas:', err);
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
@@ -275,6 +310,16 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
           observacao: 'Carga entregue'
         })
       }).catch(err => console.error('Erro ao registrar histórico:', err));
+
+      // Notificar empresa por email sobre entrega (fire-and-forget)
+      fetch(`${supabaseUrl}/functions/v1/notificar-status-carga`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ carga_id: id, status: 'entregue' })
+      }).catch(() => {});
 
       // Disparar alerta de entrega
       await dispararAlertaEntrega(id);

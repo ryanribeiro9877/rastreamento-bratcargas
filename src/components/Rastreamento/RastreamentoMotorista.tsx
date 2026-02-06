@@ -75,6 +75,16 @@ export default function RastreamentoMotorista() {
         })
       });
       setEntregue(true);
+
+      // Notificar empresa por email sobre entrega (fire-and-forget)
+      fetch(`${SUPABASE_URL}/functions/v1/notificar-status-carga`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+        },
+        body: JSON.stringify({ carga_id: carga.id, status: 'entregue' })
+      }).catch(() => {});
       // Parar rastreamento GPS
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);

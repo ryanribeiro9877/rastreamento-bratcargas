@@ -435,6 +435,16 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
         })
       }).catch(() => {});
 
+      // Notificar empresa por email sobre nova carga em trânsito (fire-and-forget)
+      fetch(`${supabaseUrl}/functions/v1/notificar-status-carga`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseKey}`,
+        },
+        body: JSON.stringify({ carga_id: carga.id, status: 'em_transito' })
+      }).catch(() => {});
+
       // Se tem telefone do motorista, gerar link de rastreamento
       if (telefoneParaWhatsapp || telefoneParaContato) {
         console.log('[CARGA] Gerando link rastreamento...');
