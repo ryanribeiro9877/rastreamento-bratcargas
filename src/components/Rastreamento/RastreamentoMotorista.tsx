@@ -61,7 +61,7 @@ export default function RastreamentoMotorista() {
     entregueRef.current = true;
     setConfirmandoEntrega(true);
     try {
-      await fetch(`${SUPABASE_URL}/rest/v1/cargas?id=eq.${carga.id}`, {
+      const entregaRes = await fetch(`${SUPABASE_URL}/rest/v1/cargas?id=eq.${carga.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -74,6 +74,8 @@ export default function RastreamentoMotorista() {
           data_entrega_real: new Date().toISOString()
         })
       });
+      console.log('[MOTORISTA] PATCH entregue:', entregaRes.status);
+      if (!entregaRes.ok) console.error('[MOTORISTA] PATCH entregue error:', await entregaRes.text());
       setEntregue(true);
 
       // Notificar empresa por email sobre entrega (fire-and-forget)
@@ -343,7 +345,21 @@ export default function RastreamentoMotorista() {
       setPosicaoAtual(pos);
       setUltimaAtualizacao(new Date());
 
-      // Mudar status para em_transito + invalidar link de rastreamento
+      // 1) Mudar status para em_transito
+      const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/cargas?id=eq.${carga.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({ status: 'em_transito' })
+      });
+      console.log('[MOTORISTA] PATCH status em_transito:', patchRes.status);
+      if (!patchRes.ok) console.error('[MOTORISTA] PATCH error:', await patchRes.text());
+
+      // 2) Invalidar link de rastreamento (separado para evitar conflito de RLS)
       fetch(`${SUPABASE_URL}/rest/v1/cargas?id=eq.${carga.id}`, {
         method: 'PATCH',
         headers: {
@@ -352,7 +368,7 @@ export default function RastreamentoMotorista() {
           'Authorization': `Bearer ${SUPABASE_KEY}`,
           'Prefer': 'return=minimal'
         },
-        body: JSON.stringify({ status: 'em_transito', link_rastreamento: null })
+        body: JSON.stringify({ link_rastreamento: null })
       }).catch(() => {});
 
       // Notificar empresa que carga entrou em trânsito (fire-and-forget)
