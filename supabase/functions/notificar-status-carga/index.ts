@@ -20,6 +20,15 @@ interface StatusConfig {
 
 function getStatusConfig(status: string): StatusConfig {
   switch (status) {
+    case 'aguardando':
+      return {
+        emoji: '📋',
+        titulo: 'Nova carga registrada para sua empresa!',
+        mensagem: 'Uma nova carga foi cadastrada no sistema e está aguardando o motorista iniciar o transporte. Assim que ele autorizar a localização, você será notificado sobre o início da viagem.',
+        cor: '#2563EB',
+        corFundo: '#EFF6FF',
+        icone: '🆕',
+      };
     case 'em_transito':
       return {
         emoji: '🚚',
@@ -178,6 +187,8 @@ function gerarEmailHTML(
 
 function getSubjectLine(status: string, notaFiscal: string): string {
   switch (status) {
+    case 'aguardando':
+      return `📋 Carga NF ${notaFiscal} - Nova carga registrada!`;
     case 'em_transito':
       return `🚚 Carga NF ${notaFiscal} - A caminho do destino!`;
     case 'entregue':

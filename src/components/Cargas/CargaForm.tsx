@@ -388,7 +388,7 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
         motorista_telefone: (telefoneParaWhatsapp || telefoneParaContato) || null,
         placa_veiculo: formData.placa_veiculo || null,
         distancia_total_km: distanciaTotalKm,
-        status: 'em_transito' as const,
+        status: 'aguardando' as const,
         status_prazo: 'no_prazo',
         velocidade_media_estimada: formData.velocidade_media_estimada || 60,
         ativo: true
@@ -431,7 +431,7 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({
-          carga_id: carga.id, status_novo: 'em_transito', observacao: 'Carga criada'
+          carga_id: carga.id, status_novo: 'aguardando', observacao: 'Carga criada - aguardando motorista'
         })
       }).catch(() => {});
 
@@ -442,7 +442,7 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${supabaseKey}`,
         },
-        body: JSON.stringify({ carga_id: carga.id, status: 'em_transito' })
+        body: JSON.stringify({ carga_id: carga.id, status: 'aguardando' })
       }).catch(() => {});
 
       // Se tem telefone do motorista, gerar link de rastreamento

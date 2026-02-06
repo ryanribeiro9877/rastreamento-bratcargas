@@ -18,7 +18,7 @@ export default function DashboardMetrics({ metricas }: DashboardMetricsProps) {
         </svg>
       ),
       cor: 'blue',
-      descricao: `${metricas.cargas_em_transito} em trânsito, ${metricas.cargas_entregues} entregues`
+      descricao: `${metricas.cargas_aguardando} aguardando, ${metricas.cargas_em_transito} em trânsito`
     },
     {
       titulo: 'No Prazo',

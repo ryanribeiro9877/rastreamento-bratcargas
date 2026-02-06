@@ -1,6 +1,6 @@
 // types/index.ts - Tipos TypeScript do Sistema de Rastreamento BratCargas
 
-export type StatusCarga = 'em_transito' | 'entregue' | 'cancelada' | 'aguardando_data';
+export type StatusCarga = 'aguardando' | 'em_transito' | 'entregue' | 'cancelada' | 'aguardando_data';
 export type StatusPrazo = 'no_prazo' | 'atrasado' | 'adiantado' | 'aguardando_data';
 export type TipoAlerta = 'entrega' | 'atraso' | 'adiantamento';
 export type DestinatarioAlerta = 'embarcador' | 'cooperativa';
@@ -170,6 +170,7 @@ export interface FiltrosCargas {
 // Tipos para métricas do dashboard
 export interface MetricasDashboard {
   total_cargas: number;
+  cargas_aguardando: number;
   cargas_em_transito: number;
   cargas_entregues: number;
   cargas_no_prazo: number;

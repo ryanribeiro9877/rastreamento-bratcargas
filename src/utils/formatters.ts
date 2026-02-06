@@ -175,6 +175,12 @@ export function getCorStatusCarga(status: StatusCarga): {
   badge: string;
 } {
   switch (status) {
+    case 'aguardando':
+      return {
+        bg: 'bg-blue-50',
+        text: 'text-blue-700',
+        badge: 'bg-blue-100 text-blue-800'
+      };
     case 'em_transito':
       return {
         bg: 'bg-yellow-50',
@@ -207,6 +213,8 @@ export function getCorStatusCarga(status: StatusCarga): {
  */
 export function getLabelStatusCarga(status: StatusCarga): string {
   switch (status) {
+    case 'aguardando':
+      return 'Aguardando';
     case 'em_transito':
       return 'Em Trânsito';
     case 'entregue':

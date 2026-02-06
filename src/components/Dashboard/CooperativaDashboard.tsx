@@ -27,7 +27,7 @@ export default function CooperativaDashboard() {
   const { signOut } = useAuth();
   const [filtros, setFiltros] = useState<FiltrosCargasType>({
     // Padrão: mostrar apenas cargas em trânsito
-    status: ['em_transito']
+    status: ['aguardando', 'em_transito']
   });
   const [cargaSelecionada, setCargaSelecionada] = useState<Carga | null>(null);
   const [viewMode, setViewMode] = useState<'lista' | 'mapa'>('mapa');
@@ -125,7 +125,7 @@ export default function CooperativaDashboard() {
       setFiltros({ status: ['entregue'] });
     } else {
       // Voltar para cargas em trânsito
-      setFiltros({ status: ['em_transito'] });
+      setFiltros({ status: ['aguardando', 'em_transito'] });
     }
   }
 
@@ -284,13 +284,13 @@ export default function CooperativaDashboard() {
         {/* Ações Rápidas */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setFiltros({ status: ['em_transito'] })}
+            onClick={() => setFiltros({ status: ['aguardando', 'em_transito'] })}
             className="px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-lg shadow-sm hover:bg-gray-50 transition"
           >
-            Cargas de Hoje
+            Cargas Ativas
           </button>
           <button
-            onClick={() => setFiltros({ status: ['em_transito'], status_prazo: ['atrasado'] })}
+            onClick={() => setFiltros({ status: ['aguardando', 'em_transito'], status_prazo: ['atrasado'] })}
             className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg shadow-sm hover:bg-red-700 transition"
           >
             Atrasadas

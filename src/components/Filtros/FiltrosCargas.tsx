@@ -92,8 +92,18 @@ export default function FiltrosCargasComponent({
 
       {/* Filtros Rápidos - Sempre Visíveis */}
       <div className="p-4 border-b bg-gray-50 border-gray-200">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
           {/* Status da Carga */}
+          <button
+            onClick={() => handleStatusToggle('aguardando')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+              (filtros.status || []).includes('aguardando')
+                ? 'bg-blue-100 text-blue-800 border-2 border-blue-300'
+                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            Aguardando
+          </button>
           <button
             onClick={() => handleStatusToggle('em_transito')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${

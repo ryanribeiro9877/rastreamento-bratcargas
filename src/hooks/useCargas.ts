@@ -210,7 +210,7 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
         motorista_telefone: dados.motorista_telefone || null,
         placa_veiculo: dados.placa_veiculo || null,
         distancia_total_km: distanciaTotal,
-        status: 'em_transito',
+        status: 'aguardando',
         status_prazo: 'no_prazo',
         velocidade_media_estimada: dados.velocidade_media_estimada || 60,
         ativo: true
@@ -486,6 +486,7 @@ export function useMetricasDashboard(embarcadorId?: string, refreshKey?: number)
 
       const cargas = await response.json();
       const total = cargas?.length || 0;
+      const aguardando = cargas?.filter((c) => c.status === 'aguardando').length || 0;
       const emTransito = cargas?.filter((c) => c.status === 'em_transito').length || 0;
       const entregues = cargas?.filter((c) => c.status === 'entregue').length || 0;
       
@@ -500,6 +501,7 @@ export function useMetricasDashboard(embarcadorId?: string, refreshKey?: number)
 
       setMetricas({
         total_cargas: total,
+        cargas_aguardando: aguardando,
         cargas_em_transito: emTransito,
         cargas_entregues: entregues,
         cargas_no_prazo: noPrazo,

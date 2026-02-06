@@ -44,6 +44,7 @@ export default function CargasModal({ onClose }: CargasModalProps) {
   const cargasFiltradas = cargas.filter(carga => {
     // Filtro de status
     if (filtroStatus !== 'todos') {
+      if (filtroStatus === 'aguardando' && carga.status !== 'aguardando') return false;
       if (filtroStatus === 'em_transito' && carga.status !== 'em_transito') return false;
       if (filtroStatus === 'entregue' && carga.status !== 'entregue') return false;
       if (filtroStatus === 'aguardando_data' && carga.status !== 'aguardando_data') return false;
@@ -125,6 +126,7 @@ export default function CargasModal({ onClose }: CargasModalProps) {
               className={`px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
             >
               <option value="todos">Todos os Status</option>
+              <option value="aguardando">Aguardando</option>
               <option value="em_transito">Em Trânsito</option>
               <option value="entregue">Entregues</option>
               <option value="aguardando_data">Aguardando Data</option>

@@ -343,15 +343,26 @@ export default function RastreamentoMotorista() {
       setPosicaoAtual(pos);
       setUltimaAtualizacao(new Date());
 
-      // Invalidar link de rastreamento (uso único)
+      // Mudar status para em_transito + invalidar link de rastreamento
       fetch(`${SUPABASE_URL}/rest/v1/cargas?id=eq.${carga.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Prefer': 'return=minimal'
         },
-        body: JSON.stringify({ link_rastreamento: null })
+        body: JSON.stringify({ status: 'em_transito', link_rastreamento: null })
+      }).catch(() => {});
+
+      // Notificar empresa que carga entrou em trânsito (fire-and-forget)
+      fetch(`${SUPABASE_URL}/functions/v1/notificar-status-carga`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+        },
+        body: JSON.stringify({ carga_id: carga.id, status: 'em_transito' })
       }).catch(() => {});
 
       // Salvar posição inicial no banco
@@ -634,7 +645,7 @@ export default function RastreamentoMotorista() {
             )}
 
             {/* Botão de autorizar */}
-            {carga?.status === 'em_transito' ? (
+            {(carga?.status === 'aguardando' || carga?.status === 'em_transito') ? (
               <>
                 <button
                   onClick={handleAutorizar}
