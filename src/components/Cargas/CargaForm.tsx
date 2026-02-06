@@ -283,13 +283,13 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
         origem_cidade: formData.origem_cidade,
         origem_uf: formData.origem_uf,
         origem_bairro: formData.origem_bairro || null,
-        origem_lat: -12.9714,
-        origem_lng: -38.5014,
+        origem_lat: null,
+        origem_lng: null,
         destino_cidade: formData.destino_cidade,
         destino_uf: formData.destino_uf,
         destino_bairro: formData.destino_bairro || null,
-        destino_lat: -23.5505,
-        destino_lng: -46.6333,
+        destino_lat: null,
+        destino_lng: null,
         toneladas: formData.toneladas || 0,
         descricao: formData.descricao
           ? `[Tipo de carga: ${tipoCarga}] ${formData.descricao}`
@@ -299,7 +299,7 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
         motorista_nome: formData.motorista_nome || null,
         motorista_telefone: (telefoneParaWhatsapp || telefoneParaContato) || null,
         placa_veiculo: formData.placa_veiculo || null,
-        distancia_total_km: calcularDistanciaTotal(-12.9714, -38.5014, -23.5505, -46.6333),
+        distancia_total_km: null,
         status: 'em_transito' as const,
         status_prazo: 'no_prazo',
         velocidade_media_estimada: formData.velocidade_media_estimada || 60,
@@ -314,6 +314,9 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
       const insertResponse = await fetch(`${supabaseUrl}/rest/v1/cargas`, {
         method: 'POST',
         headers: {
@@ -322,8 +325,11 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
           'Authorization': `Bearer ${session.access_token}`,
           'Prefer': 'return=representation'
         },
-        body: JSON.stringify(dadosParaInserir)
+        body: JSON.stringify(dadosParaInserir),
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       console.log('[CARGA] Insert response status:', insertResponse.status);
 
@@ -348,26 +354,39 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
         body: JSON.stringify({
           carga_id: carga.id, status_novo: 'em_transito', observacao: 'Carga criada'
         })
-      });
+      }).catch(err => console.error('Erro ao registrar histórico:', err));
 
       // Se tem telefone do motorista, gerar link de rastreamento
       if (telefoneParaWhatsapp || telefoneParaContato) {
-        const linkRastreamento = await rastreamentoService.gerarLinkRastreamento(
-          carga.id,
-          (telefoneParaWhatsapp || telefoneParaContato)
-        );
+        try {
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Timeout ao gerar link')), 10000)
+          );
 
-        const mensagem = rastreamentoService.gerarMensagemCompartilhamento(linkRastreamento);
-        const whatsappUrl = telefoneParaWhatsapp
-          ? rastreamentoService.gerarUrlWhatsApp(telefoneParaWhatsapp, mensagem)
-          : rastreamentoService.gerarUrlWhatsApp(telefoneParaContato, mensagem);
-        const smsUrl = rastreamentoService.gerarUrlSms(telefoneParaContato || telefoneParaWhatsapp, mensagem);
+          const linkRastreamento = await Promise.race([
+            rastreamentoService.gerarLinkRastreamento(
+              carga.id,
+              (telefoneParaWhatsapp || telefoneParaContato)
+            ),
+            timeoutPromise
+          ]);
 
-        setEnvioAssistido({
-          linkRastreamento,
-          whatsappUrl,
-          smsUrl
-        });
+          const mensagem = rastreamentoService.gerarMensagemCompartilhamento(linkRastreamento);
+          const whatsappUrl = telefoneParaWhatsapp
+            ? rastreamentoService.gerarUrlWhatsApp(telefoneParaWhatsapp, mensagem)
+            : rastreamentoService.gerarUrlWhatsApp(telefoneParaContato, mensagem);
+          const smsUrl = rastreamentoService.gerarUrlSms(telefoneParaContato || telefoneParaWhatsapp, mensagem);
+
+          setEnvioAssistido({
+            linkRastreamento,
+            whatsappUrl,
+            smsUrl
+          });
+        } catch (linkErr) {
+          console.warn('Falha ao gerar link de rastreamento:', linkErr);
+          alert('Carga cadastrada com sucesso! (Link de rastreamento não pôde ser gerado)');
+          onSuccess?.();
+        }
 
         return;
       }
