@@ -137,23 +137,31 @@ export default function CargasList({
                 </td>
                 
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
-                    <div
-                      className={`h-2 rounded-full transition-all duration-500 ${
-                        carga.status_prazo === 'no_prazo' ? 'bg-green-500' :
-                        carga.status_prazo === 'atrasado' ? 'bg-red-500' :
-                        'bg-blue-500'
-                      }`}
-                      style={{ width: `${Math.min(progresso.percentualPercorrido, 100)}%` }}
-                    />
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {progresso.percentualPercorrido}% concluído
-                  </div>
-                  {carga.ultima_posicao && (
-                    <div className="text-xs text-gray-400">
-                      {formatarTempoRelativo(carga.ultima_posicao.timestamp)}
+                  {carga.status === 'aguardando' ? (
+                    <div className="text-xs text-blue-600 font-medium">
+                      Aguardando motorista
                     </div>
+                  ) : (
+                    <>
+                      <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                        <div
+                          className={`h-2 rounded-full transition-all duration-500 ${
+                            carga.status_prazo === 'no_prazo' ? 'bg-green-500' :
+                            carga.status_prazo === 'atrasado' ? 'bg-red-500' :
+                            'bg-blue-500'
+                          }`}
+                          style={{ width: `${Math.min(progresso.percentualPercorrido, 100)}%` }}
+                        />
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {progresso.percentualPercorrido}% concluído
+                      </div>
+                      {carga.ultima_posicao && (
+                        <div className="text-xs text-gray-400">
+                          {formatarTempoRelativo(carga.ultima_posicao.timestamp)}
+                        </div>
+                      )}
+                    </>
                   )}
                 </td>
                 

@@ -62,6 +62,24 @@ export default function CargaStatus({
     }
   };
 
+  if (statusCarga === 'aguardando') {
+    return (
+      <div className="inline-flex items-center gap-2">
+        <div className="flex items-center justify-center w-12 h-12 bg-blue-100 rounded-full">
+          <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        {showLabel && (
+          <div>
+            <div className="font-semibold text-blue-700">Aguardando</div>
+            <div className="text-xs text-gray-500">Aguardando motorista</div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (statusCarga === 'entregue') {
     return (
       <div className="inline-flex items-center gap-2">
@@ -132,6 +150,15 @@ export function StatusBadge({
   const cores = getCorStatusPrazo(statusPrazo);
   const label = getLabelStatusPrazo(statusPrazo);
   
+  if (statusCarga === 'aguardando') {
+    return (
+      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+        <span className="w-2 h-2 rounded-full bg-blue-500 mr-2" />
+        Aguardando
+      </span>
+    );
+  }
+
   if (statusCarga === 'entregue') {
     return (
       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
