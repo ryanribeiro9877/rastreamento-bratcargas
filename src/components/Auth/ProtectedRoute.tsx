@@ -2,6 +2,7 @@
 
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useInactivityTimeout } from '../../hooks/useInactivityTimeout';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -15,6 +16,9 @@ export default function ProtectedRoute({
   requireEmbarcador = false
 }: ProtectedRouteProps) {
   const { user, loading, isCooperativa, isEmbarcador } = useAuth();
+
+  // Logout automático após 10 minutos de inatividade (coop e embarcador)
+  useInactivityTimeout();
 
   if (loading) {
     return (
