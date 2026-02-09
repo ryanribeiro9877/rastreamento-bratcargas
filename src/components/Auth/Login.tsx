@@ -44,11 +44,14 @@ export default function Login() {
     const erro = searchParams.get('erro');
     if (erro === 'sem_permissao') {
       setError('Seu usuário não tem permissão de acesso. Entre em contato com a cooperativa.');
+      // Limpar o parâmetro da URL para não persistir o erro
+      window.history.replaceState({}, '', '/login');
     }
-  }, [searchParams]);
+  }, []);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
+    setError('');
     
     if (!email || !password) {
       setError('Preencha todos os campos');
