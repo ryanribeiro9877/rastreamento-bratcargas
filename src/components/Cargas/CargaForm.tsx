@@ -236,6 +236,25 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
             ? rastreamentoService.gerarUrlWhatsApp(telefoneParaWhatsapp, mensagem)
             : rastreamentoService.gerarUrlWhatsApp(telefoneParaContato, mensagem);
           const smsUrl = rastreamentoService.gerarUrlSms(telefoneParaContato || telefoneParaWhatsapp, mensagem);
+
+          // Enviar dados para webhook (fire-and-forget)
+          const numeroWhatsapp = (telefoneParaWhatsapp || telefoneParaContato).replace(/\D/g, '');
+          const origemCompleta = [formData.origem_cidade, formData.origem_uf, formData.origem_bairro].filter(Boolean).join(', ');
+          const destinoCompleto = [formData.destino_cidade, formData.destino_uf, formData.destino_bairro].filter(Boolean).join(', ');
+          fetch('https://webhook.vpslafelicita.shop/webhook/entregabratcarga', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              nome: formData.motorista_nome || '',
+              url: linkRastreamento,
+              mensagem: mensagem,
+              numero: numeroWhatsapp,
+              origem: origemCompleta,
+              destino: destinoCompleto
+            })
+          }).then(() => console.log('[WEBHOOK] Enviado com sucesso'))
+            .catch(err => console.warn('[WEBHOOK] Falha ao enviar:', err));
+
           clearTimeout(safetyTimeout);
           setLoading(false);
           setEnvioAssistido({ linkRastreamento, whatsappUrl, smsUrl });
