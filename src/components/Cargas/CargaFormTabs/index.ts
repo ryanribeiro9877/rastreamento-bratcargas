@@ -7,3 +7,4 @@ export { default as TabRota } from './TabRota';
 export { default as TabDatas } from './TabDatas';
 export { default as EnvioAssistido } from './EnvioAssistido';
 export { validarCelular, montarTelefoneBr } from './types';
+export type { Motorista } from './TabMotorista';

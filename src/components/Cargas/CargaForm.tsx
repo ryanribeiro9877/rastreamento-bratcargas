@@ -16,6 +16,7 @@ import {
   validarCelular,
   montarTelefoneBr,
 } from './CargaFormTabs';
+import type { Motorista } from './CargaFormTabs';
 
 interface CargaFormProps {
   embarcadorId?: string;
@@ -50,6 +51,8 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
   const [envioAssistido, setEnvioAssistido] = useState<null | {
     linkRastreamento: string; whatsappUrl: string; smsUrl: string;
   }>(null);
+  const [motoristas, setMotoristas] = useState<Motorista[]>([]);
+  const [motoristaSelId, setMotoristaSelId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<CargaFormData>({
     nota_fiscal: '', embarcador_id: embarcadorId || '',
@@ -85,6 +88,26 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
     }
     carregarEmbarcadores();
   }, [embarcadorId]);
+
+  // Carregar motoristas salvos
+  useEffect(() => {
+    async function carregarMotoristas() {
+      try {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        const token = getAccessTokenSync();
+        if (!token) return;
+        const response = await fetch(
+          `${supabaseUrl}/rest/v1/motoristas?select=*&ativo=eq.true&order=nome.asc`,
+          { headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${token}` } }
+        );
+        if (!response.ok) return;
+        const data = await response.json();
+        if (Array.isArray(data)) setMotoristas(data);
+      } catch (err) { console.error('[MOTORISTAS] Erro:', err); }
+    }
+    carregarMotoristas();
+  }, []);
 
   function handleChange(field: keyof CargaFormData, value: any) {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -212,6 +235,44 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
         body: JSON.stringify({ carga_id: carga.id, status: 'aguardando' })
       }).catch(() => {});
 
+      // Salvar/atualizar motorista automaticamente (fire-and-forget)
+      if (formData.motorista_nome) {
+        const motData = {
+          embarcador_id: formData.embarcador_id || embarcadorId,
+          nome: formData.motorista_nome,
+          telefone: (telefoneParaContato) || null,
+          telefone_whatsapp: (telefoneParaWhatsapp) || null,
+          placa_veiculo: formData.placa_veiculo || null,
+          veiculo_marca: formData.veiculo_marca || null,
+          veiculo_modelo: formData.veiculo_modelo || null,
+          veiculo_cor: formData.veiculo_cor || null,
+          veiculo_ano: formData.veiculo_ano || null,
+          veiculo_ano_modelo: formData.veiculo_ano_modelo || null,
+          veiculo_importado: formData.veiculo_importado || null,
+          veiculo_cilindrada: formData.veiculo_cilindrada || null,
+          veiculo_potencia: formData.veiculo_potencia || null,
+          veiculo_combustivel: formData.veiculo_combustivel || null,
+          veiculo_chassi: formData.veiculo_chassi || null,
+          veiculo_motor: formData.veiculo_motor || null,
+          veiculo_uf: formData.veiculo_uf || null,
+          veiculo_municipio: formData.veiculo_municipio || null,
+          updated_at: new Date().toISOString(),
+        };
+        if (motoristaSelId) {
+          // Atualizar motorista existente
+          fetch(`${supabaseUrl}/rest/v1/motoristas?id=eq.${motoristaSelId}`, {
+            method: 'PATCH', headers: authHeaders, body: JSON.stringify(motData)
+          }).then(() => console.log('[MOTORISTA] Atualizado'))
+            .catch(err => console.warn('[MOTORISTA] Erro ao atualizar:', err));
+        } else {
+          // Criar novo motorista
+          fetch(`${supabaseUrl}/rest/v1/motoristas`, {
+            method: 'POST', headers: authHeaders, body: JSON.stringify(motData)
+          }).then(() => console.log('[MOTORISTA] Salvo'))
+            .catch(err => console.warn('[MOTORISTA] Erro ao salvar:', err));
+        }
+      }
+
       if (telefoneParaWhatsapp || telefoneParaContato) {
         try {
           const linkRastreamento = await rastreamentoService.gerarLinkRastreamento(carga.id, (telefoneParaWhatsapp || telefoneParaContato), token);
@@ -293,12 +354,14 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">{error}</div>}
 
       {activeTab === 'motorista' && (
-        <TabMotorista formData={formData} handleChange={handleChange}
+        <TabMotorista formData={formData} handleChange={handleChange} setFormData={setFormData}
           telefone1Ddd={telefone1Ddd} setTelefone1Ddd={setTelefone1Ddd}
           telefone1Numero={telefone1Numero} setTelefone1Numero={setTelefone1Numero}
           telefone1EhWhatsapp={telefone1EhWhatsapp} setTelefone1EhWhatsapp={setTelefone1EhWhatsapp}
           telefoneWhatsappDdd={telefoneWhatsappDdd} setTelefoneWhatsappDdd={setTelefoneWhatsappDdd}
           telefoneWhatsappNumero={telefoneWhatsappNumero} setTelefoneWhatsappNumero={setTelefoneWhatsappNumero}
+          motoristas={motoristas}
+          onSelectMotorista={(m) => setMotoristaSelId(m?.id || null)}
         />
       )}
       {activeTab === 'veiculo' && <TabVeiculo formData={formData} handleChange={handleChange} setFormData={setFormData} />}
