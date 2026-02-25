@@ -258,19 +258,21 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
           veiculo_municipio: formData.veiculo_municipio || null,
           updated_at: new Date().toISOString(),
         };
-        if (motoristaSelId) {
-          // Atualizar motorista existente
-          fetch(`${supabaseUrl}/rest/v1/motoristas?id=eq.${motoristaSelId}`, {
-            method: 'PATCH', headers: authHeaders, body: JSON.stringify(motData)
-          }).then(() => console.log('[MOTORISTA] Atualizado'))
-            .catch(err => console.warn('[MOTORISTA] Erro ao atualizar:', err));
-        } else {
-          // Criar novo motorista
-          fetch(`${supabaseUrl}/rest/v1/motoristas`, {
-            method: 'POST', headers: authHeaders, body: JSON.stringify(motData)
-          }).then(() => console.log('[MOTORISTA] Salvo'))
-            .catch(err => console.warn('[MOTORISTA] Erro ao salvar:', err));
-        }
+        const motUrl = motoristaSelId
+          ? `${supabaseUrl}/rest/v1/motoristas?id=eq.${motoristaSelId}`
+          : `${supabaseUrl}/rest/v1/motoristas`;
+        const motMethod = motoristaSelId ? 'PATCH' : 'POST';
+        console.log(`[MOTORISTA] ${motMethod} embarcador_id=${motData.embarcador_id}, nome=${motData.nome}`);
+        fetch(motUrl, {
+          method: motMethod, headers: authHeaders, body: JSON.stringify(motData)
+        }).then(async (res) => {
+          if (!res.ok) {
+            const body = await res.text();
+            console.error(`[MOTORISTA] Erro ${res.status}:`, body);
+          } else {
+            console.log(`[MOTORISTA] ${motoristaSelId ? 'Atualizado' : 'Salvo'} com sucesso`);
+          }
+        }).catch(err => console.warn('[MOTORISTA] Erro de rede:', err));
       }
 
       if (telefoneParaWhatsapp || telefoneParaContato) {
