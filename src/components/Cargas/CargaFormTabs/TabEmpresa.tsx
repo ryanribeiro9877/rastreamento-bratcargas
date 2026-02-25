@@ -42,7 +42,7 @@ export default function TabEmpresa({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Nota fiscal *
+            Nota fiscal
           </label>
           <input
             type="text"
@@ -50,7 +50,6 @@ export default function TabEmpresa({
             onChange={(e) => handleChange('nota_fiscal', e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="Ex: 12345"
-            required
           />
         </div>
 

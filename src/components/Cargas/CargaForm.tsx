@@ -126,7 +126,7 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
       setLoading(true);
       setError('');
 
-      if (!formData.nota_fiscal || !formData.origem_cidade || !formData.destino_cidade) throw new Error('Preencha todos os campos obrigatórios');
+      if (!formData.origem_cidade || !formData.destino_cidade) throw new Error('Preencha todos os campos obrigatórios');
       if (!formData.origem_uf || !formData.destino_uf) throw new Error('Selecione o estado de saída e o estado de destino');
       if (!formData.data_carregamento) throw new Error('Selecione a data de saída');
       if (!formData.prazo_entrega) throw new Error('Selecione a estimativa de entrega');
@@ -180,7 +180,7 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
 
       const dadosParaInserir = {
         embarcador_id: formData.embarcador_id || embarcadorId,
-        nota_fiscal: formData.nota_fiscal,
+        nota_fiscal: formData.nota_fiscal || null,
         origem_cidade: formData.origem_cidade, origem_uf: formData.origem_uf,
         origem_bairro: formData.origem_bairro || null, origem_logradouro: formData.origem_logradouro || null,
         origem_numero: formData.origem_numero || null, origem_lat: origemLat, origem_lng: origemLng,
