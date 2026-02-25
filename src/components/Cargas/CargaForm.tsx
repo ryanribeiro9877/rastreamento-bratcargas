@@ -1,6 +1,6 @@
 // components/Cargas/CargaForm.tsx - Formulário de Cadastro de Carga (Refatorado)
 
-import { useMemo, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { rastreamentoService } from '../../services/rastreamento';
 import { geocodeCidadeUf } from '../../services/mapboxGeocoding';
 import { calcularDistanciaTotal } from '../../utils/calculos';
@@ -60,14 +60,6 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
     velocidade_media_estimada: 60
   });
 
-  const prazoEntregaMax = useMemo(() => {
-    if (!formData.data_carregamento) return '';
-    const base = new Date(formData.data_carregamento);
-    if (Number.isNaN(base.getTime())) return '';
-    const max = new Date(base);
-    max.setDate(max.getDate() + 8);
-    return `${max.getFullYear()}-${String(max.getMonth() + 1).padStart(2, '0')}-${String(max.getDate()).padStart(2, '0')}T23:59`;
-  }, [formData.data_carregamento]);
 
   useEffect(() => {
     if (embarcadorId) return;
@@ -122,14 +114,6 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
         if (!telefone1EhWhatsapp) {
           if (!telefoneWhatsappDdd || !telefoneWhatsappNumero) throw new Error('Informe um telefone com WhatsApp');
           if (!validarCelular(telefoneWhatsappNumero)) throw new Error('Telefone WhatsApp inválido: informe 9 dígitos e o primeiro deve ser 9');
-        }
-      }
-
-      if (prazoEntregaMax) {
-        const dtEntrega = new Date(formData.prazo_entrega);
-        const dtMax = new Date(prazoEntregaMax);
-        if (!Number.isNaN(dtEntrega.getTime()) && !Number.isNaN(dtMax.getTime()) && dtEntrega.getTime() > dtMax.getTime()) {
-          throw new Error('data ultrapassa a quantidade de dias estabelecido. Por favor selecione uma data válida.');
         }
       }
 
@@ -320,7 +304,7 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
       {activeTab === 'veiculo' && <TabVeiculo formData={formData} handleChange={handleChange} setFormData={setFormData} />}
       {activeTab === 'empresa' && <TabEmpresa formData={formData} handleChange={handleChange} embarcadorId={embarcadorId} embarcadores={embarcadores} tipoCarga={tipoCarga} setTipoCarga={setTipoCarga} />}
       {activeTab === 'rota' && <TabRota formData={formData} handleChange={handleChange} setFormData={setFormData} />}
-      {activeTab === 'datas' && <TabDatas formData={formData} handleChange={handleChange} prazoEntregaMax={prazoEntregaMax} error={error} setError={setError} />}
+      {activeTab === 'datas' && <TabDatas formData={formData} handleChange={handleChange} prazoEntregaMax={''} error={error} setError={setError} />}
 
       <div className="flex gap-4 pt-4 border-t">
         {onCancel && (

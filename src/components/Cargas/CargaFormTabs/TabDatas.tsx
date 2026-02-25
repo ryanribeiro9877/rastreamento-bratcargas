@@ -11,9 +11,6 @@ interface TabDatasProps extends TabProps {
 export default function TabDatas({
   formData,
   handleChange,
-  prazoEntregaMax,
-  error,
-  setError,
 }: TabDatasProps) {
   return (
     <div className="space-y-4 animate-fade-in">
@@ -25,24 +22,7 @@ export default function TabDatas({
           <input
             type="datetime-local"
             value={formData.data_carregamento}
-            onChange={(e) => {
-              const value = e.target.value;
-              handleChange('data_carregamento', value);
-
-              if (!value) return;
-              if (!formData.prazo_entrega) return;
-
-              const dtSaida = new Date(value);
-              const dtEntrega = new Date(formData.prazo_entrega);
-              const max = new Date(dtSaida);
-              max.setDate(max.getDate() + 8);
-
-              if (!Number.isNaN(dtEntrega.getTime()) && dtEntrega.getTime() > max.getTime()) {
-                setError('data ultrapassa a quantidade de dias estabelecido. Por favor selecione uma data válida.');
-              } else if (error) {
-                setError('');
-              }
-            }}
+            onChange={(e) => handleChange('data_carregamento', e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             required
           />
@@ -53,29 +33,10 @@ export default function TabDatas({
           <input
             type="datetime-local"
             value={formData.prazo_entrega}
-            max={prazoEntregaMax || undefined}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (prazoEntregaMax) {
-                const dtEntrega = new Date(value);
-                const dtMax = new Date(prazoEntregaMax);
-                if (!Number.isNaN(dtEntrega.getTime()) && !Number.isNaN(dtMax.getTime()) && dtEntrega.getTime() > dtMax.getTime()) {
-                  setError('data ultrapassa a quantidade de dias estabelecido. Por favor selecione uma data válida.');
-                  return;
-                }
-              }
-
-              if (error) setError('');
-              handleChange('prazo_entrega', value);
-            }}
+            onChange={(e) => handleChange('prazo_entrega', e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             required
           />
-          {prazoEntregaMax && (
-            <div className="text-xs text-gray-500 mt-1">
-              Máximo permitido: 8 dias após a saída
-            </div>
-          )}
         </div>
       </div>
     </div>
