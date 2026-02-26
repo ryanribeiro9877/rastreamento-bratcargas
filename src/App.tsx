@@ -155,15 +155,14 @@ function App() {
 function DashboardRouter() {
   const { loading, isCooperativa, isEmbarcador, signOut } = useAuth();
 
-  // TEMPORARIAMENTE DESATIVADO - verificação de permissão
-  // const semPermissao = !loading && !isCooperativa && !isEmbarcador;
-  // useEffect(() => {
-  //   if (semPermissao) {
-  //     signOut().finally(() => {
-  //       window.location.replace('/login?erro=sem_permissao');
-  //     });
-  //   }
-  // }, [semPermissao]);
+  const semPermissao = !loading && !isCooperativa && !isEmbarcador;
+  useEffect(() => {
+    if (semPermissao) {
+      signOut().finally(() => {
+        window.location.replace('/login?erro=sem_permissao');
+      });
+    }
+  }, [semPermissao]);
 
   if (loading) {
     return (
@@ -179,12 +178,10 @@ function DashboardRouter() {
     );
   }
 
-  // TEMPORÁRIO: forçar acesso master (Cooperativa) como padrão
-  // if (isCooperativa) {
-  //   return <CooperativaDashboard />;
-  // }
-  // return <EmbarcadorDashboard />;
-  return <CooperativaDashboard />;
+  if (isCooperativa) {
+    return <CooperativaDashboard />;
+  }
+  return <EmbarcadorDashboard />;
 }
 
 export default App;
