@@ -179,11 +179,12 @@ function DashboardRouter() {
     );
   }
 
-  if (isCooperativa) {
-    return <CooperativaDashboard />;
-  }
-
-  return <EmbarcadorDashboard />;
+  // TEMPORÁRIO: forçar acesso master (Cooperativa) como padrão
+  // if (isCooperativa) {
+  //   return <CooperativaDashboard />;
+  // }
+  // return <EmbarcadorDashboard />;
+  return <CooperativaDashboard />;
 }
 
 export default App;
