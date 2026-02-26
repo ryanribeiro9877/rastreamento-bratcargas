@@ -3,10 +3,10 @@
 import { Component, useEffect, Suspense, lazy, type ErrorInfo, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth, AuthProvider } from './hooks/useAuth';
-import Login from './components/Auth/Login';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 
 // Code-splitting: carrega cada dashboard/página apenas quando necessário
+const Login = lazy(() => import('./components/Auth/Login'));
 const EmbarcadorDashboard = lazy(() => import('./components/Dashboard/EmbarcadorDashboard'));
 const CooperativaDashboard = lazy(() => import('./components/Dashboard/CooperativaDashboard'));
 const RastreamentoMotorista = lazy(() => import('./components/Rastreamento/RastreamentoMotorista'));

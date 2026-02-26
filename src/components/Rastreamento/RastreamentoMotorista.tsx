@@ -46,6 +46,53 @@ export default function RastreamentoMotorista() {
   const lastRouteUpdateRef = useRef<number>(0);
   const ROUTE_UPDATE_INTERVAL = 30000; // Atualizar rota a cada 30s (estilo Uber/iFood)
 
+  // Buffer local de posições GPS (V13 - reduz latência e perda de dados)
+  type GpsPosicao = {
+    carga_id: string;
+    latitude: number;
+    longitude: number;
+    velocidade: number | null;
+    precisao_metros: number;
+    origem: string;
+    timestamp: string;
+  };
+  const gpsBufferRef = useRef<GpsPosicao[]>([]);
+  const flushIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const GPS_FLUSH_INTERVAL = 30000; // Enviar posições em lote a cada 30s
+
+  // Enviar buffer de posições GPS em lote
+  function flushGpsBuffer() {
+    if (gpsBufferRef.current.length === 0) return;
+    const batch = [...gpsBufferRef.current];
+    gpsBufferRef.current = [];
+    fetch(`${SUPABASE_URL}/rest/v1/posicoes_gps`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify(batch)
+    }).catch((err) => {
+      console.error('[GPS Buffer] Falha ao enviar lote, re-adicionando ao buffer:', err);
+      gpsBufferRef.current = [...batch, ...gpsBufferRef.current];
+    });
+  }
+
+  // Adicionar posição ao buffer
+  function bufferGpsPosition(cargaId: string, lat: number, lng: number, speed: number | null, accuracy: number) {
+    gpsBufferRef.current.push({
+      carga_id: cargaId,
+      latitude: lat,
+      longitude: lng,
+      velocidade: speed,
+      precisao_metros: accuracy,
+      origem: 'api_rastreamento',
+      timestamp: new Date().toISOString()
+    });
+  }
+
   // Calcular distância entre dois pontos (Haversine)
   function calcularDistanciaLocal(lat1: number, lng1: number, lat2: number, lng2: number): number {
     const R = 6371;
@@ -61,6 +108,9 @@ export default function RastreamentoMotorista() {
     entregueRef.current = true;
     setConfirmandoEntrega(true);
     try {
+      // Enviar posições pendentes no buffer antes de finalizar
+      flushGpsBuffer();
+
       const entregaRes = await fetch(`${SUPABASE_URL}/rest/v1/cargas?id=eq.${carga.id}`, {
         method: 'PATCH',
         headers: {
@@ -71,7 +121,8 @@ export default function RastreamentoMotorista() {
         },
         body: JSON.stringify({
           status: 'entregue',
-          data_entrega_real: new Date().toISOString()
+          data_entrega_real: new Date().toISOString(),
+          link_rastreamento: null
         })
       });
       console.log('[MOTORISTA] PATCH entregue:', entregaRes.status);
@@ -87,10 +138,14 @@ export default function RastreamentoMotorista() {
         },
         body: JSON.stringify({ carga_id: carga.id, status: 'entregue' })
       }).catch(() => {});
-      // Parar rastreamento GPS
+      // Parar rastreamento GPS e flush interval
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
+      }
+      if (flushIntervalRef.current !== null) {
+        clearInterval(flushIntervalRef.current);
+        flushIntervalRef.current = null;
       }
     } catch (err) {
       console.error('Erro ao confirmar entrega:', err);
@@ -359,18 +414,6 @@ export default function RastreamentoMotorista() {
       console.log('[MOTORISTA] PATCH status em_transito:', patchRes.status);
       if (!patchRes.ok) console.error('[MOTORISTA] PATCH error:', await patchRes.text());
 
-      // 2) Invalidar link de rastreamento (separado para evitar conflito de RLS)
-      fetch(`${SUPABASE_URL}/rest/v1/cargas?id=eq.${carga.id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Prefer': 'return=minimal'
-        },
-        body: JSON.stringify({ link_rastreamento: null })
-      }).catch(() => {});
-
       // Notificar empresa que carga entrou em trânsito (fire-and-forget)
       fetch(`${SUPABASE_URL}/functions/v1/notificar-status-carga`, {
         method: 'POST',
@@ -381,24 +424,13 @@ export default function RastreamentoMotorista() {
         body: JSON.stringify({ carga_id: carga.id, status: 'em_transito' })
       }).catch(() => {});
 
-      // Salvar posição inicial no banco
-      fetch(`${SUPABASE_URL}/rest/v1/posicoes_gps`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`
-        },
-        body: JSON.stringify({
-          carga_id: carga.id,
-          latitude: pos.lat,
-          longitude: pos.lng,
-          velocidade: posicao.coords.speed,
-          precisao_metros: posicao.coords.accuracy,
-          origem: 'api_rastreamento',
-          timestamp: new Date().toISOString()
-        })
-      }).catch(() => {});
+      // Salvar posição inicial no buffer (será enviada no primeiro flush)
+      bufferGpsPosition(carga.id, pos.lat, pos.lng, posicao.coords.speed, posicao.coords.accuracy);
+      // Enviar posição inicial imediatamente
+      flushGpsBuffer();
+
+      // Iniciar flush periódico do buffer GPS
+      flushIntervalRef.current = setInterval(flushGpsBuffer, GPS_FLUSH_INTERVAL);
 
       // Mudar para tela do mapa
       setEtapa('mapa');
@@ -414,24 +446,8 @@ export default function RastreamentoMotorista() {
           // Verificar se chegou ao destino
           verificarChegadaDestino(newLatLng.lat, newLatLng.lng);
 
-          // Salvar no banco (a cada atualização)
-          fetch(`${SUPABASE_URL}/rest/v1/posicoes_gps`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'apikey': SUPABASE_KEY,
-              'Authorization': `Bearer ${SUPABASE_KEY}`
-            },
-            body: JSON.stringify({
-              carga_id: carga.id,
-              latitude: newLatLng.lat,
-              longitude: newLatLng.lng,
-              velocidade: newPos.coords.speed,
-              precisao_metros: newPos.coords.accuracy,
-              origem: 'api_rastreamento',
-              timestamp: new Date().toISOString()
-            })
-          }).catch(() => {});
+          // Adicionar ao buffer local (enviado em lote a cada 30s)
+          bufferGpsPosition(carga.id, newLatLng.lat, newLatLng.lng, newPos.coords.speed, newPos.coords.accuracy);
         },
         (err) => console.error('Erro watch position:', err),
         { enableHighAccuracy: true, maximumAge: 30000 }
@@ -464,8 +480,13 @@ export default function RastreamentoMotorista() {
   // Cleanup
   useEffect(() => {
     return () => {
+      // Enviar posições pendentes antes de sair
+      flushGpsBuffer();
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+      if (flushIntervalRef.current !== null) {
+        clearInterval(flushIntervalRef.current);
       }
       if (mapRef.current) {
         mapRef.current.remove();
