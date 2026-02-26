@@ -36,13 +36,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let isMounted = true;
     let initialSessionHandled = false;
 
-    // Timeout de segurança: se após 5s ainda estiver loading, força parar
+    // Timeout de segurança: se após 15s ainda estiver loading, força parar
     const safetyTimeout = setTimeout(() => {
       if (isMounted) {
         console.warn('Timeout de segurança: forçando fim do loading');
         setAuthState(prev => prev.loading ? { ...prev, loading: false } : prev);
       }
-    }, 5000);
+    }, 15000);
 
     // Verificar sessão atual
     supabase.auth.getSession().then(({ data: { session }, error }) => {
