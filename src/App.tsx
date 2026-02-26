@@ -1,7 +1,10 @@
 // App.tsx - Arquivo principal com rotas
 
-import { Component, useEffect, Suspense, lazy, type ErrorInfo, type ReactNode } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { useEffect, Suspense, lazy } from 'react';
+import * as Sentry from '@sentry/react';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './lib/queryClient';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth, AuthProvider } from './hooks/useAuth';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 
@@ -11,38 +14,22 @@ const EmbarcadorDashboard = lazy(() => import('./components/Dashboard/Embarcador
 const CooperativaDashboard = lazy(() => import('./components/Dashboard/CooperativaDashboard'));
 const RastreamentoMotorista = lazy(() => import('./components/Rastreamento/RastreamentoMotorista'));
 
-class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: unknown }> {
-  state = { hasError: false as boolean, error: undefined as unknown };
-
-  static getDerivedStateFromError(error: unknown) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: unknown, info: ErrorInfo) {
-    console.error('Erro não tratado na aplicação:', error, info);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      const message = this.state.error instanceof Error ? this.state.error.message : String(this.state.error);
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-          <div className="bg-white border border-red-200 rounded-lg shadow-sm p-6 max-w-2xl w-full">
-            <h2 className="text-xl font-bold text-red-700 mb-2">Ocorreu um erro ao carregar a página</h2>
-            <p className="text-sm text-gray-700 mb-4">{message}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-            >
-              Recarregar
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    return this.props.children;
-  }
+function SentryFallback({ error }: { error: unknown }) {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+      <div className="bg-white border border-red-200 rounded-lg shadow-sm p-6 max-w-2xl w-full">
+        <h2 className="text-xl font-bold text-red-700 mb-2">Ocorreu um erro ao carregar a página</h2>
+        <p className="text-sm text-gray-700 mb-4">{message}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+        >
+          Recarregar
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function AppContent() {
@@ -141,13 +128,15 @@ function AppContent() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <ErrorBoundary>
-        <AuthProvider>
-          <AppContent />
-        </AuthProvider>
-      </ErrorBoundary>
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Sentry.ErrorBoundary fallback={SentryFallback}>
+          <AuthProvider>
+            <AppContent />
+          </AuthProvider>
+        </Sentry.ErrorBoundary>
+      </BrowserRouter>
+    </QueryClientProvider>
   );
 }
 

@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../services/supabase';
+import { queryClient } from '../lib/queryClient';
 
 interface UseRealtimeOptions {
   onInsert?: (payload: any) => void;
@@ -36,6 +37,12 @@ export function useRealtime(
       },
       (payload) => {
         console.log(`[Realtime ${tabela}]`, payload);
+
+        // Invalidar cache do TanStack Query para a tabela afetada
+        queryClient.invalidateQueries({ queryKey: [tabela] });
+        if (tabela === 'cargas') {
+          queryClient.invalidateQueries({ queryKey: ['metricas'] });
+        }
 
         switch (payload.eventType) {
           case 'INSERT':

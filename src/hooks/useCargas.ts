@@ -1,6 +1,7 @@
-// hooks/useCargas.ts - Hook para gerenciar cargas
+// hooks/useCargas.ts - Hook para gerenciar cargas (com cache via TanStack Query)
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../services/supabase';
 import type { Carga, CargaFormData, FiltrosCargas, MetricasDashboard } from '../types';
 import { calcularDistanciaTotal, calcularStatusPrazo } from '../utils/calculos';
@@ -19,15 +20,94 @@ function getAccessTokenSync(): string | null {
   }
 }
 
+// Função pura de fetch — usada pelo useQuery
+async function fetchCargasData(embarcadorId?: string, filtros?: FiltrosCargas): Promise<Carga[]> {
+  const token = getAccessTokenSync();
+  if (!token) return [];
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const filtrosObj = filtros || {};
+
+  // Construir query params
+  const params = new URLSearchParams();
+  params.set('select', '*,embarcador:embarcadores(*),posicoes:posicoes_gps(*)');
+  params.set('ativo', 'eq.true');
+  params.set('order', 'created_at.desc');
+
+  if (embarcadorId) {
+    params.set('embarcador_id', `eq.${embarcadorId}`);
+  }
+  if (filtrosObj.status && filtrosObj.status.length > 0) {
+    params.set('status', `in.(${filtrosObj.status.join(',')})`);
+  }
+  if (filtrosObj.status_prazo && filtrosObj.status_prazo.length > 0) {
+    params.set('status_prazo', `in.(${filtrosObj.status_prazo.join(',')})`);
+  }
+  if (filtrosObj.nota_fiscal) {
+    params.set('nota_fiscal', `ilike.*${filtrosObj.nota_fiscal}*`);
+  }
+  if (filtrosObj.origem_uf) {
+    params.set('origem_uf', `eq.${filtrosObj.origem_uf}`);
+  }
+  if (filtrosObj.destino_uf) {
+    params.set('destino_uf', `eq.${filtrosObj.destino_uf}`);
+  }
+  if (filtrosObj.motorista_nome) {
+    params.set('motorista_nome', `ilike.*${filtrosObj.motorista_nome}*`);
+  }
+  if (filtrosObj.placa_veiculo) {
+    params.set('placa_veiculo', `ilike.*${filtrosObj.placa_veiculo}*`);
+  }
+  if (filtrosObj.data_carregamento_inicio) {
+    params.set('data_carregamento', `gte.${filtrosObj.data_carregamento_inicio}`);
+  }
+  if (filtrosObj.data_carregamento_fim) {
+    params.append('data_carregamento', `lte.${filtrosObj.data_carregamento_fim}`);
+  }
+  if (filtrosObj.prazo_entrega_inicio) {
+    params.set('prazo_entrega', `gte.${filtrosObj.prazo_entrega_inicio}`);
+  }
+  if (filtrosObj.prazo_entrega_fim) {
+    params.append('prazo_entrega', `lte.${filtrosObj.prazo_entrega_fim}`);
+  }
+
+  const response = await fetch(`${supabaseUrl}/rest/v1/cargas?${params.toString()}`, {
+    headers: {
+      'apikey': supabaseKey,
+      'Authorization': `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) {
+    const errBody = await response.text();
+    throw new Error(`Erro ao buscar cargas: ${response.status} - ${errBody}`);
+  }
+
+  const data = await response.json();
+
+  // Processar cargas: extrair última posição do array de posições
+  return (data || []).map((carga: any) => {
+    const posicoes = carga.posicoes || [];
+    const ultimaPosicao = posicoes.length > 0
+      ? posicoes.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]
+      : undefined;
+
+    return {
+      ...carga,
+      embarcador: carga.embarcador ?? undefined,
+      ultima_posicao: ultimaPosicao,
+      posicoes: undefined
+    } as Carga;
+  });
+}
+
 export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
-  const [cargas, setCargas] = useState<Carga[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const statusPrazoAnteriorRef = useRef<Record<string, string>>({});
   const notificacoesEnviadasRef = useRef<Set<string>>(new Set());
 
-  // Memorizar os filtros serializados para evitar loops infinitos
+  // Memorizar os filtros serializados para queryKey estável
   const filtrosSerializados = useMemo(() => {
     if (!filtros) return '{}';
     return JSON.stringify(filtros);
@@ -45,138 +125,45 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
     filtros?.prazo_entrega_fim
   ]);
 
+  // TanStack Query: fetch com cache automático
+  const { data: cargas = [], isLoading: loading, error: queryError, refetch } = useQuery({
+    queryKey: ['cargas', embarcadorId || 'all', filtrosSerializados],
+    queryFn: () => fetchCargasData(embarcadorId, filtros),
+    staleTime: 15 * 1000, // 15s — dados que mudam frequentemente
+  });
+
+  const error = queryError ? (queryError instanceof Error ? queryError.message : 'Erro desconhecido') : null;
+
+  // Side effect: detectar mudanças de status_prazo e notificar (preservado do original)
   useEffect(() => {
-    fetchCargas();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [embarcadorId, filtrosSerializados]);
+    if (!cargas.length) return;
+    const token = getAccessTokenSync();
+    if (!token) return;
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-  async function fetchCargas() {
-    try {
-      if (isInitialLoad) setLoading(true);
-      setError(null);
+    for (const c of cargas) {
+      if (c.status !== 'em_transito') continue;
+      const statusPrazoCalculado = calcularStatusPrazo(c, c.ultima_posicao);
+      const statusAnterior = statusPrazoAnteriorRef.current[c.id] || c.status_prazo || 'no_prazo';
+      const chaveNotif = `${c.id}_${statusPrazoCalculado}`;
 
-      const token = getAccessTokenSync();
-      if (!token) return;
-
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      const filtrosObj = filtros || {};
-
-      // Construir query params
-      const params = new URLSearchParams();
-      params.set('select', '*,embarcador:embarcadores(*),posicoes:posicoes_gps(*)');
-      params.set('ativo', 'eq.true');
-      params.set('order', 'created_at.desc');
-
-      if (embarcadorId) {
-        params.set('embarcador_id', `eq.${embarcadorId}`);
+      if (statusPrazoCalculado !== statusAnterior && !notificacoesEnviadasRef.current.has(chaveNotif)) {
+        notificacoesEnviadasRef.current.add(chaveNotif);
+        fetch(`${supabaseUrl}/rest/v1/cargas?id=eq.${c.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'apikey': supabaseKey, 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ status_prazo: statusPrazoCalculado })
+        }).catch(() => {});
+        fetch(`${supabaseUrl}/functions/v1/notificar-status-carga`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+          body: JSON.stringify({ carga_id: c.id, status: statusPrazoCalculado })
+        }).catch(() => {});
       }
-      if (filtrosObj.status && filtrosObj.status.length > 0) {
-        params.set('status', `in.(${filtrosObj.status.join(',')})`);
-      }
-      if (filtrosObj.status_prazo && filtrosObj.status_prazo.length > 0) {
-        params.set('status_prazo', `in.(${filtrosObj.status_prazo.join(',')})`);
-      }
-      if (filtrosObj.nota_fiscal) {
-        params.set('nota_fiscal', `ilike.*${filtrosObj.nota_fiscal}*`);
-      }
-      if (filtrosObj.origem_uf) {
-        params.set('origem_uf', `eq.${filtrosObj.origem_uf}`);
-      }
-      if (filtrosObj.destino_uf) {
-        params.set('destino_uf', `eq.${filtrosObj.destino_uf}`);
-      }
-      if (filtrosObj.motorista_nome) {
-        params.set('motorista_nome', `ilike.*${filtrosObj.motorista_nome}*`);
-      }
-      if (filtrosObj.placa_veiculo) {
-        params.set('placa_veiculo', `ilike.*${filtrosObj.placa_veiculo}*`);
-      }
-      if (filtrosObj.data_carregamento_inicio) {
-        params.set('data_carregamento', `gte.${filtrosObj.data_carregamento_inicio}`);
-      }
-      if (filtrosObj.data_carregamento_fim) {
-        params.append('data_carregamento', `lte.${filtrosObj.data_carregamento_fim}`);
-      }
-      if (filtrosObj.prazo_entrega_inicio) {
-        params.set('prazo_entrega', `gte.${filtrosObj.prazo_entrega_inicio}`);
-      }
-      if (filtrosObj.prazo_entrega_fim) {
-        params.append('prazo_entrega', `lte.${filtrosObj.prazo_entrega_fim}`);
-      }
-
-      const response = await fetch(`${supabaseUrl}/rest/v1/cargas?${params.toString()}`, {
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        const errBody = await response.text();
-        throw new Error(`Erro ao buscar cargas: ${response.status} - ${errBody}`);
-      }
-
-      const data = await response.json();
-
-      // Processar cargas: extrair última posição do array de posições
-      const cargasProcessadas = (data || []).map((carga: any) => {
-        const posicoes = carga.posicoes || [];
-        // Ordenar por timestamp desc e pegar a primeira
-        const ultimaPosicao = posicoes.length > 0
-          ? posicoes.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]
-          : undefined;
-
-        return {
-          ...carga,
-          embarcador: carga.embarcador ?? undefined,
-          ultima_posicao: ultimaPosicao,
-          posicoes: undefined
-        } as Carga;
-      });
-
-      setCargas(cargasProcessadas);
-
-      // Detectar mudanças de status_prazo e notificar empresa por email
-      const supabaseKeyForNotif = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      for (const c of cargasProcessadas) {
-        if (c.status !== 'em_transito') continue;
-        const statusPrazoCalculado = calcularStatusPrazo(c, c.ultima_posicao);
-        const statusAnterior = statusPrazoAnteriorRef.current[c.id] || c.status_prazo || 'no_prazo';
-        const chaveNotif = `${c.id}_${statusPrazoCalculado}`;
-
-        if (statusPrazoCalculado !== statusAnterior && !notificacoesEnviadasRef.current.has(chaveNotif)) {
-          notificacoesEnviadasRef.current.add(chaveNotif);
-          // Atualizar status_prazo no banco
-          fetch(`${supabaseUrl}/rest/v1/cargas?id=eq.${c.id}`, {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              'apikey': supabaseKey,
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ status_prazo: statusPrazoCalculado })
-          }).catch(() => {});
-          // Enviar notificação por email
-          fetch(`${supabaseUrl}/functions/v1/notificar-status-carga`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${supabaseKeyForNotif}`,
-            },
-            body: JSON.stringify({ carga_id: c.id, status: statusPrazoCalculado })
-          }).catch(() => {});
-        }
-        statusPrazoAnteriorRef.current[c.id] = statusPrazoCalculado;
-      }
-    } catch (err) {
-      console.error('Erro ao buscar cargas:', err);
-      setError(err instanceof Error ? err.message : 'Erro desconhecido');
-    } finally {
-      setLoading(false);
-      if (isInitialLoad) setIsInitialLoad(false);
+      statusPrazoAnteriorRef.current[c.id] = statusPrazoCalculado;
     }
-  }
+  }, [cargas]);
 
   async function criarCarga(dados: CargaFormData): Promise<Carga> {
     try {
@@ -234,8 +221,9 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
         }
       ] as any);
 
-      // Atualizar lista em background (não bloqueia)
-      setTimeout(() => fetchCargas(), 100);
+      // Invalidar cache para refetch automático
+      queryClient.invalidateQueries({ queryKey: ['cargas'] });
+      queryClient.invalidateQueries({ queryKey: ['metricas'] });
       
       return data as Carga;
     } catch (err) {
@@ -270,7 +258,8 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
         throw new Error(`Erro ao atualizar carga: ${response.status} - ${errBody}`);
       }
 
-      await fetchCargas();
+      queryClient.invalidateQueries({ queryKey: ['cargas'] });
+      queryClient.invalidateQueries({ queryKey: ['metricas'] });
     } catch (err) {
       console.error('Erro ao atualizar carga:', err);
       throw err;
@@ -324,7 +313,8 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
       // Disparar alerta de entrega
       await dispararAlertaEntrega(id);
 
-      await fetchCargas();
+      queryClient.invalidateQueries({ queryKey: ['cargas'] });
+      queryClient.invalidateQueries({ queryKey: ['metricas'] });
     } catch (err) {
       console.error('Erro ao marcar como entregue:', err);
       throw err;
@@ -362,7 +352,8 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
         })
       }).catch(err => console.error('Erro ao registrar histórico:', err));
 
-      await fetchCargas();
+      queryClient.invalidateQueries({ queryKey: ['cargas'] });
+      queryClient.invalidateQueries({ queryKey: ['metricas'] });
     } catch (err) {
       console.error('Erro ao cancelar carga:', err);
       throw err;
@@ -403,7 +394,8 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
         throw new Error(`Erro ao excluir carga: ${deleteResponse.status} - ${errBody}`);
       }
 
-      await fetchCargas();
+      queryClient.invalidateQueries({ queryKey: ['cargas'] });
+      queryClient.invalidateQueries({ queryKey: ['metricas'] });
     } catch (err) {
       console.error('Erro ao excluir carga:', err);
       throw err;
@@ -438,7 +430,7 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
     cargas,
     loading,
     error,
-    refetch: fetchCargas,
+    refetch,
     criarCarga,
     atualizarCarga,
     marcarComoEntregue,
@@ -447,78 +439,70 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
   };
 }
 
-// Hook para métricas do dashboard
+// Função pura de fetch para métricas
+async function fetchMetricasData(embarcadorId?: string): Promise<MetricasDashboard | null> {
+  const token = getAccessTokenSync();
+  if (!token) return null;
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  let queryStr = `${supabaseUrl}/rest/v1/cargas?select=status,status_prazo,toneladas&ativo=eq.true`;
+  if (embarcadorId) {
+    queryStr += `&embarcador_id=eq.${embarcadorId}`;
+  }
+
+  const response = await fetch(queryStr, {
+    headers: {
+      'apikey': supabaseKey,
+      'Authorization': `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) throw new Error('Erro ao buscar métricas');
+
+  const cargas = await response.json();
+  const total = cargas?.length || 0;
+  const aguardando = cargas?.filter((c: any) => c.status === 'aguardando').length || 0;
+  const emTransito = cargas?.filter((c: any) => c.status === 'em_transito').length || 0;
+  const entregues = cargas?.filter((c: any) => c.status === 'entregue').length || 0;
+
+  const noPrazo = cargas?.filter((c: any) => c.status_prazo === 'no_prazo').length || 0;
+  const atrasadas = cargas?.filter((c: any) => c.status_prazo === 'atrasado').length || 0;
+  const adiantadas = cargas?.filter((c: any) => c.status_prazo === 'adiantado').length || 0;
+
+  const totalToneladas = cargas?.reduce((sum: number, c: any) => sum + (c.toneladas || 0), 0) || 0;
+  const toneladasEntregues = cargas
+    ?.filter((c: any) => c.status === 'entregue')
+    .reduce((sum: number, c: any) => sum + (c.toneladas || 0), 0) || 0;
+
+  return {
+    total_cargas: total,
+    cargas_aguardando: aguardando,
+    cargas_em_transito: emTransito,
+    cargas_entregues: entregues,
+    cargas_no_prazo: noPrazo,
+    cargas_atrasadas: atrasadas,
+    cargas_adiantadas: adiantadas,
+    total_toneladas_transporte: totalToneladas,
+    total_toneladas_entregues: toneladasEntregues,
+    percentual_entrega_prazo: entregues > 0 ? (noPrazo / entregues) * 100 : 0,
+    percentual_entrega_adiantada: entregues > 0 ? (adiantadas / entregues) * 100 : 0,
+    percentual_entrega_atrasada: entregues > 0 ? (atrasadas / entregues) * 100 : 0
+  };
+}
+
+// Hook para métricas do dashboard (com cache via TanStack Query)
 export function useMetricasDashboard(embarcadorId?: string, refreshKey?: number): {
   metricas: MetricasDashboard | null;
   loading: boolean;
   refetch: () => void;
 } {
-  const [metricas, setMetricas] = useState<MetricasDashboard | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: metricas = null, isLoading: loading, refetch } = useQuery({
+    queryKey: ['metricas', embarcadorId || 'all', refreshKey],
+    queryFn: () => fetchMetricasData(embarcadorId),
+    staleTime: 10 * 1000, // 10s — dashboard precisa ser mais atual
+  });
 
-  useEffect(() => {
-    fetchMetricas();
-  }, [embarcadorId, refreshKey]);
-
-  async function fetchMetricas() {
-    try {
-      setLoading(true);
-
-      const token = getAccessTokenSync();
-      if (!token) return;
-
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-      let queryStr = `${supabaseUrl}/rest/v1/cargas?select=status,status_prazo,toneladas&ativo=eq.true`;
-      if (embarcadorId) {
-        queryStr += `&embarcador_id=eq.${embarcadorId}`;
-      }
-
-      const response = await fetch(queryStr, {
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) throw new Error('Erro ao buscar métricas');
-
-      const cargas = await response.json();
-      const total = cargas?.length || 0;
-      const aguardando = cargas?.filter((c) => c.status === 'aguardando').length || 0;
-      const emTransito = cargas?.filter((c) => c.status === 'em_transito').length || 0;
-      const entregues = cargas?.filter((c) => c.status === 'entregue').length || 0;
-      
-      const noPrazo = cargas?.filter((c) => c.status_prazo === 'no_prazo').length || 0;
-      const atrasadas = cargas?.filter((c) => c.status_prazo === 'atrasado').length || 0;
-      const adiantadas = cargas?.filter((c) => c.status_prazo === 'adiantado').length || 0;
-
-      const totalToneladas = cargas?.reduce((sum, c) => sum + (c.toneladas || 0), 0) || 0;
-      const toneladasEntregues = cargas
-        ?.filter((c) => c.status === 'entregue')
-        .reduce((sum, c) => sum + (c.toneladas || 0), 0) || 0;
-
-      setMetricas({
-        total_cargas: total,
-        cargas_aguardando: aguardando,
-        cargas_em_transito: emTransito,
-        cargas_entregues: entregues,
-        cargas_no_prazo: noPrazo,
-        cargas_atrasadas: atrasadas,
-        cargas_adiantadas: adiantadas,
-        total_toneladas_transporte: totalToneladas,
-        total_toneladas_entregues: toneladasEntregues,
-        percentual_entrega_prazo: entregues > 0 ? (noPrazo / entregues) * 100 : 0,
-        percentual_entrega_adiantada: entregues > 0 ? (adiantadas / entregues) * 100 : 0,
-        percentual_entrega_atrasada: entregues > 0 ? (atrasadas / entregues) * 100 : 0
-      });
-    } catch (err) {
-      console.error('Erro ao calcular métricas:', err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return { metricas, loading, refetch: fetchMetricas };
+  return { metricas, loading, refetch };
 }
