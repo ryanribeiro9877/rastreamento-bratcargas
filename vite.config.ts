@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react'
 // https://vitejs.dev/config/
 export default defineConfig({
   build: {
-    sourcemap: true, // Necessário para o Sentry mostrar stack traces legíveis
+    sourcemap: 'hidden', // Gera sourcemaps para Sentry mas não expõe publicamente
   },
   plugins: [
     react(),

@@ -4,16 +4,27 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+const ALLOWED_ORIGINS = [
+  "https://rastreamentobrat.com.br",
+  "https://www.rastreamentobrat.com.br",
+];
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get("origin") || "";
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  };
+}
 
 function gerarSenhaAleatoria(tamanho = 10): string {
   const caracteres = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  const randomValues = new Uint32Array(tamanho);
+  crypto.getRandomValues(randomValues);
   let senha = '';
   for (let i = 0; i < tamanho; i++) {
-    senha += caracteres.charAt(Math.floor(Math.random() * caracteres.length));
+    senha += caracteres.charAt(randomValues[i] % caracteres.length);
   }
   return senha;
 }
@@ -126,6 +137,8 @@ async function enviarEmailCredenciais(
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -297,7 +310,6 @@ serve(async (req) => {
         success: true,
         message: "Usuario de consulta criado com sucesso",
         usuario: { id: authUserId, email, nome, role: "consulta" },
-        senhaGerada: senhaGerada,
         emailEnviado: emailEnviado,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

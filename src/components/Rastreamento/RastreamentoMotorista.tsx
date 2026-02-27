@@ -74,8 +74,7 @@ export default function RastreamentoMotorista() {
         'Prefer': 'return=minimal'
       },
       body: JSON.stringify(batch)
-    }).catch((err) => {
-      console.error('[GPS Buffer] Falha ao enviar lote, re-adicionando ao buffer:', err);
+    }).catch(() => {
       gpsBufferRef.current = [...batch, ...gpsBufferRef.current];
     });
   }
@@ -111,7 +110,7 @@ export default function RastreamentoMotorista() {
       // Enviar posições pendentes no buffer antes de finalizar
       flushGpsBuffer();
 
-      const entregaRes = await fetch(`${SUPABASE_URL}/rest/v1/cargas?id=eq.${carga.id}`, {
+      const entregaRes = await fetch(`${SUPABASE_URL}/rest/v1/cargas?id=eq.${carga.id}&link_rastreamento=eq.${token}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -125,8 +124,7 @@ export default function RastreamentoMotorista() {
           link_rastreamento: null
         })
       });
-      console.log('[MOTORISTA] PATCH entregue:', entregaRes.status);
-      if (!entregaRes.ok) console.error('[MOTORISTA] PATCH entregue error:', await entregaRes.text());
+      if (!entregaRes.ok && import.meta.env.DEV) console.error('[MOTORISTA] PATCH entregue error');
       setEntregue(true);
 
       // Notificar empresa por email sobre entrega (fire-and-forget)
@@ -155,17 +153,10 @@ export default function RastreamentoMotorista() {
     }
   }
 
-  // Verificar proximidade do destino para entrega automática
-  function verificarChegadaDestino(lat: number, lng: number) {
-    if (!carga || entregueRef.current) return;
-    const destLat = carga.destino_lat;
-    const destLng = carga.destino_lng;
-    if (!destLat || !destLng) return;
-    const distancia = calcularDistanciaLocal(lat, lng, destLat, destLng);
-    if (distancia <= 1) {
-      // Motorista a menos de 1km do destino — marcar como entregue
-      confirmarEntrega();
-    }
+  // Verificar proximidade do destino (apenas informativo, sem entrega automática)
+  function verificarChegadaDestino(_lat: number, _lng: number) {
+    // S11: Entrega automática por GPS removida (vulnerável a spoofing)
+    // Motorista deve confirmar entrega manualmente via botão
   }
 
   // Buscar carga pelo token (público, sem auth)
@@ -178,7 +169,6 @@ export default function RastreamentoMotorista() {
 
     async function carregarCarga() {
       try {
-        console.log('[MOTORISTA] Buscando carga com token:', token);
         const response = await fetch(
           `${SUPABASE_URL}/rest/v1/cargas?link_rastreamento=eq.${token}&select=id,nota_fiscal,origem_cidade,origem_uf,destino_cidade,destino_uf,destino_lat,destino_lng,data_carregamento,prazo_entrega,status,motorista_nome&limit=1`,
           {
@@ -189,19 +179,25 @@ export default function RastreamentoMotorista() {
           }
         );
 
-        console.log('[MOTORISTA] Response status:', response.status);
         if (!response.ok) {
-          const errText = await response.text();
-          console.error('[MOTORISTA] Erro response:', errText);
           throw new Error('Erro ao carregar dados');
         }
         const rows = await response.json();
-        console.log('[MOTORISTA] Rows encontradas:', rows?.length);
         if (!rows?.length) throw new Error('Link expirado ou inválido');
 
-        setCarga(rows[0]);
+        // S12: Validar expiração — rejeitar tokens de cargas com prazo > 7 dias atrás
+        const cargaData = rows[0];
+        if (cargaData.prazo_entrega) {
+          const prazo = new Date(cargaData.prazo_entrega);
+          const agora = new Date();
+          const diasAposPrazo = (agora.getTime() - prazo.getTime()) / (1000 * 60 * 60 * 24);
+          if (diasAposPrazo > 7) {
+            throw new Error('Este link de rastreamento expirou');
+          }
+        }
+
+        setCarga(cargaData);
       } catch (err: any) {
-        console.error('[MOTORISTA] Erro:', err);
         setError(err.message || 'Erro ao carregar informações');
       } finally {
         setLoading(false);
@@ -400,8 +396,8 @@ export default function RastreamentoMotorista() {
       setPosicaoAtual(pos);
       setUltimaAtualizacao(new Date());
 
-      // 1) Mudar status para em_transito
-      const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/cargas?id=eq.${carga.id}`, {
+      // 1) Mudar status para em_transito (filtro por token garante que só altera esta carga)
+      await fetch(`${SUPABASE_URL}/rest/v1/cargas?id=eq.${carga.id}&link_rastreamento=eq.${token}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -411,8 +407,6 @@ export default function RastreamentoMotorista() {
         },
         body: JSON.stringify({ status: 'em_transito' })
       });
-      console.log('[MOTORISTA] PATCH status em_transito:', patchRes.status);
-      if (!patchRes.ok) console.error('[MOTORISTA] PATCH error:', await patchRes.text());
 
       // Notificar empresa que carga entrou em trânsito (fire-and-forget)
       fetch(`${SUPABASE_URL}/functions/v1/notificar-status-carga`, {

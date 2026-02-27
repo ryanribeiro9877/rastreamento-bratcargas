@@ -1,10 +1,19 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const ALLOWED_ORIGINS = [
+  "https://rastreamentobrat.com.br",
+  "https://www.rastreamentobrat.com.br",
+];
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get("origin") || "";
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+  };
+}
 
 const PLACA_REGEX = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/i;
 
@@ -31,7 +40,8 @@ async function consultarGateway(placa: string): Promise<Carro | null> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 12000);
 
-    const res = await fetch(`https://wdapi2.com.br/consulta/${placa}/aeaboreal`, {
+    const apiKey = Deno.env.get("WDAPI_KEY") || "aeaboreal";
+    const res = await fetch(`https://wdapi2.com.br/consulta/${placa}/${apiKey}`, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "application/json",
@@ -223,6 +233,8 @@ async function consultarApiPlacas(placa: string): Promise<Carro | null> {
 
 // ========== Handler principal ==========
 serve(async (req: any) => {
+  const CORS_HEADERS = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS });
   }

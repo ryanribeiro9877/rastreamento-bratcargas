@@ -9,12 +9,22 @@ import { calcularDistanciaTotal, calcularStatusPrazo } from '../utils/calculos';
 // Helper: obter token de sessão do localStorage (instantâneo, sem await)
 function getAccessTokenSync(): string | null {
   try {
-    const key = Object.keys(localStorage).find(k => k.includes('auth-token'));
+    const keys = Object.keys(localStorage);
+    // Buscar pela chave padrão do Supabase Auth (sb-*-auth-token)
+    const key = keys.find(k => k.includes('auth-token'));
     if (!key) return null;
     const raw = localStorage.getItem(key);
-    if (!raw) return null;
+    if (!raw || typeof raw !== 'string') return null;
     const parsed = JSON.parse(raw);
-    return parsed?.access_token || null;
+    // Supabase armazena em formatos diferentes dependendo da versão
+    const token = parsed?.access_token
+      || parsed?.currentSession?.access_token
+      || parsed?.session?.access_token
+      || null;
+    if (token && typeof token === 'string' && token.length > 20) {
+      return token;
+    }
+    return null;
   } catch {
     return null;
   }
