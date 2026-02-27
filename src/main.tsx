@@ -15,11 +15,12 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>,
 )
 
-// Registrar Service Worker para cache de tiles do mapa
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw-tiles.js').catch((err) => {
-      console.warn('SW registration failed:', err);
-    });
+// Service Worker de tiles desativado temporariamente (CSP da Cloudflare bloqueia fetch)
+// Desregistrar SW antigo caso exista no navegador do usuário
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const registration of registrations) {
+      registration.unregister();
+    }
   });
 }
