@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ALLOWED_ORIGINS = [
   "https://rastreamentobrat.com.br",
@@ -13,6 +14,23 @@ function getCorsHeaders(req: Request) {
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
+}
+
+// VULN-005: Rate limiting helper
+async function checkRateLimitPlaca(identifier: string, maxRequests: number): Promise<boolean> {
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    const { data, error } = await supabase.rpc('check_rate_limit', {
+      p_function_name: 'consultar-placa',
+      p_identifier: identifier,
+      p_max_requests: maxRequests,
+      p_window_minutes: 60
+    });
+    if (error) { console.error('[RATE] Erro:', error.message); return true; }
+    return data === true;
+  } catch { return true; }
 }
 
 const PLACA_REGEX = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/i;
@@ -240,6 +258,16 @@ serve(async (req: any) => {
   }
 
   try {
+    // VULN-005: Rate limiting (30 requests/hora por IP)
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const allowed = await checkRateLimitPlaca(clientIp, 30);
+    if (!allowed) {
+      return new Response(
+        JSON.stringify({ data: null, erros: ["Muitas requisições. Tente novamente mais tarde."] }),
+        { status: 429, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+      );
+    }
+
     const { placa } = await req.json();
 
     if (!placa) {
@@ -294,7 +322,8 @@ serve(async (req: any) => {
       { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
-    console.error(`[ERRO] ${error.message}`);
+    // VULN-009: Log detalhado no servidor, mensagem genérica ao cliente
+    console.error(`[ERRO INTERNO]`, error);
     return new Response(
       JSON.stringify({
         data: null,

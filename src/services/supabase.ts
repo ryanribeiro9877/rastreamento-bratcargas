@@ -50,7 +50,8 @@ export const getUserProfile = async (userId: string) => {
 
 // Helper para logout
 export const signOut = async () => {
-  const { error } = await supabase.auth.signOut();
+  // VULN-012: Invalidar todas as sessões (global) ao fazer logout
+  const { error } = await supabase.auth.signOut({ scope: 'global' });
   if (error) throw error;
 };
 

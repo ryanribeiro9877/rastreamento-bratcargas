@@ -18,6 +18,34 @@ function getCorsHeaders(req: Request) {
   };
 }
 
+// VULN-007: Validação de email
+function validarEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
+}
+
+// VULN-008: Sanitizar inputs
+function sanitizeInput(str: string): string {
+  return str.replace(/<[^>]*>/g, '').trim();
+}
+
+function sanitizeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// VULN-005: Rate limiting helper
+async function checkRateLimit(supabaseAdmin: any, functionName: string, identifier: string, maxRequests: number): Promise<boolean> {
+  try {
+    const { data, error } = await supabaseAdmin.rpc('check_rate_limit', {
+      p_function_name: functionName,
+      p_identifier: identifier,
+      p_max_requests: maxRequests,
+      p_window_minutes: 60
+    });
+    if (error) { console.error('[RATE] Erro:', error.message); return true; }
+    return data === true;
+  } catch { return true; }
+}
+
 function gerarSenhaAleatoria(tamanho = 10): string {
   const caracteres = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
   const randomValues = new Uint32Array(tamanho);
@@ -161,6 +189,16 @@ serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
+    // VULN-005: Rate limiting (10 requests/hora por IP)
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const allowed = await checkRateLimit(supabaseAdmin, 'criar-usuario-consulta', clientIp, 10);
+    if (!allowed) {
+      return new Response(
+        JSON.stringify({ error: "Muitas requisições. Tente novamente mais tarde." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Verificar quem esta chamando (deve ser um gerente de empresa)
     const supabaseCaller = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
       global: { headers: { Authorization: authHeader } },
@@ -192,11 +230,29 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { email, nome } = body;
+    // VULN-008: Sanitizar inputs
+    const email = (body.email || '').trim().toLowerCase();
+    const nome = sanitizeInput(body.nome || '');
 
     if (!email || !nome) {
       return new Response(
         JSON.stringify({ error: "Campos obrigatorios: email, nome" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // VULN-007: Validar email
+    if (!validarEmail(email)) {
+      return new Response(
+        JSON.stringify({ error: "Email inválido" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // VULN-007: Limitar tamanho
+    if (nome.length > 200) {
+      return new Response(
+        JSON.stringify({ error: "Nome excede tamanho máximo" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -256,21 +312,25 @@ serve(async (req) => {
             user_metadata: { tipo: 'embarcador', role: 'consulta', nome: nome },
           });
           if (newAuthError || !newAuthData?.user) {
+            // VULN-009: Mensagem genérica
+            console.error('[EDGE] Erro ao recriar usuario:', newAuthError?.message);
             return new Response(
-              JSON.stringify({ error: `Erro ao criar usuario: ${newAuthError?.message || 'Erro desconhecido'}` }),
+              JSON.stringify({ error: 'Erro ao criar usuario' }),
               { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           }
           authUserId = newAuthData.user.id;
         } else {
+          console.error('[EDGE] Erro ao criar usuario:', authError.message);
           return new Response(
-            JSON.stringify({ error: `Erro ao criar usuario: ${authError.message}` }),
+            JSON.stringify({ error: 'Erro ao criar usuario' }),
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
       } else {
+        console.error('[EDGE] Erro ao criar usuario:', authError.message);
         return new Response(
-          JSON.stringify({ error: `Erro ao criar usuario: ${authError.message}` }),
+          JSON.stringify({ error: 'Erro ao criar usuario' }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -292,8 +352,9 @@ serve(async (req) => {
 
     if (vinculoError) {
       await supabaseAdmin.auth.admin.deleteUser(authUserId);
+      console.error('[EDGE] Erro ao vincular usuario:', vinculoError.message);
       return new Response(
-        JSON.stringify({ error: `Erro ao vincular usuario: ${vinculoError.message}` }),
+        JSON.stringify({ error: 'Erro ao vincular usuario' }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -302,7 +363,8 @@ serve(async (req) => {
     const razaoSocial = (callerProfile.embarcador as any)?.razao_social || 'Empresa';
     let emailEnviado = false;
     if (resendApiKey) {
-      emailEnviado = await enviarEmailCredenciais(email, senhaGerada, nome, razaoSocial, resendApiKey);
+      // VULN-008: Sanitizar dados no email
+      emailEnviado = await enviarEmailCredenciais(email, senhaGerada, sanitizeHtml(nome), sanitizeHtml(razaoSocial), resendApiKey);
     }
 
     return new Response(
@@ -315,9 +377,10 @@ serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error('[EDGE] Erro:', error);
+    // VULN-009: Log detalhado no servidor, mensagem genérica ao cliente
+    console.error('[EDGE] Erro interno:', error);
     return new Response(
-      JSON.stringify({ error: `Erro interno: ${(error as Error).message}` }),
+      JSON.stringify({ error: 'Erro interno ao processar requisição' }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

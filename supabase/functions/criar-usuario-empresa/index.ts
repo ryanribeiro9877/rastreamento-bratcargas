@@ -18,6 +18,50 @@ function getCorsHeaders(req: Request) {
   };
 }
 
+// VULN-007: Validação de CNPJ
+function validarCNPJ(cnpj: string): boolean {
+  const limpo = cnpj.replace(/[^\d]/g, '');
+  if (limpo.length !== 14) return false;
+  if (/^(\d)\1+$/.test(limpo)) return false;
+  const calc = (digits: string, factors: number[]) => {
+    let sum = 0;
+    for (let i = 0; i < factors.length; i++) sum += parseInt(digits[i]) * factors[i];
+    const rest = sum % 11;
+    return rest < 2 ? 0 : 11 - rest;
+  };
+  const d1 = calc(limpo, [5,4,3,2,9,8,7,6,5,4,3,2]);
+  const d2 = calc(limpo, [6,5,4,3,2,9,8,7,6,5,4,3,2]);
+  return parseInt(limpo[12]) === d1 && parseInt(limpo[13]) === d2;
+}
+
+// VULN-007: Validação de email
+function validarEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
+}
+
+// VULN-008: Sanitizar inputs (remover tags HTML)
+function sanitizeInput(str: string): string {
+  return str.replace(/<[^>]*>/g, '').trim();
+}
+
+function sanitizeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// VULN-005: Rate limiting helper
+async function checkRateLimit(supabaseAdmin: any, functionName: string, identifier: string, maxRequests: number): Promise<boolean> {
+  try {
+    const { data, error } = await supabaseAdmin.rpc('check_rate_limit', {
+      p_function_name: functionName,
+      p_identifier: identifier,
+      p_max_requests: maxRequests,
+      p_window_minutes: 60
+    });
+    if (error) { console.error('[RATE] Erro:', error.message); return true; }
+    return data === true;
+  } catch { return true; }
+}
+
 function gerarSenhaAleatoria(tamanho = 10): string {
   const caracteres = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
   const randomValues = new Uint32Array(tamanho);
@@ -142,15 +186,74 @@ serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
+    // VULN-005: Rate limiting (5 requests/hora por IP)
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const allowed = await checkRateLimit(supabaseAdmin, 'criar-usuario-empresa', clientIp, 5);
+    if (!allowed) {
+      return new Response(
+        JSON.stringify({ error: "Muitas requisições. Tente novamente mais tarde." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // VULN-007: Verificar que o chamador é cooperativa
+    const authHeader = req.headers.get('Authorization');
+    if (authHeader && authHeader !== `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`) {
+      const supabaseCaller = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+        global: { headers: { Authorization: authHeader } },
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      const { data: { user: callerUser } } = await supabaseCaller.auth.getUser();
+      if (callerUser) {
+        const { data: isCooperativa } = await supabaseAdmin
+          .from('usuarios_cooperativa')
+          .select('id')
+          .eq('user_id', callerUser.id)
+          .eq('ativo', true)
+          .single();
+        if (!isCooperativa) {
+          return new Response(
+            JSON.stringify({ error: "Apenas a cooperativa pode criar empresas" }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+    }
+
     const body = await req.json();
-    const razaoSocial = body.razaoSocial || body.razao_social;
-    const cnpj = body.cnpj;
-    const emailContato = body.emailContato || body.email_contato;
-    const telefone = body.telefone;
+    // VULN-008: Sanitizar inputs
+    const razaoSocial = sanitizeInput(body.razaoSocial || body.razao_social || '');
+    const cnpj = (body.cnpj || '').replace(/[^\d]/g, '');
+    const emailContato = (body.emailContato || body.email_contato || '').trim().toLowerCase();
+    const telefone = sanitizeInput(body.telefone || '');
 
     if (!razaoSocial || !cnpj || !emailContato) {
       return new Response(
         JSON.stringify({ error: "Campos obrigatorios: razao_social, cnpj, email_contato" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // VULN-007: Validar CNPJ
+    if (!validarCNPJ(cnpj)) {
+      return new Response(
+        JSON.stringify({ error: "CNPJ inválido" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // VULN-007: Validar email
+    if (!validarEmail(emailContato)) {
+      return new Response(
+        JSON.stringify({ error: "Email inválido" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // VULN-007: Limitar tamanho dos campos
+    if (razaoSocial.length > 200 || emailContato.length > 254 || telefone.length > 20) {
+      return new Response(
+        JSON.stringify({ error: "Campos excedem tamanho máximo" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -212,21 +315,25 @@ serve(async (req) => {
             user_metadata: { tipo: 'embarcador', razao_social: razaoSocial },
           });
           if (newAuthError || !newAuthData?.user) {
-            return new Response(
-              JSON.stringify({ error: `Erro ao recriar usuario: ${newAuthError?.message || 'Erro desconhecido'}` }),
+            // VULN-009: Mensagem genérica
+          console.error('[EDGE] Erro ao recriar usuario:', newAuthError?.message);
+          return new Response(
+              JSON.stringify({ error: 'Erro ao criar usuario' }),
               { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           }
           authUserId = newAuthData.user.id;
         } else {
+          console.error('[EDGE] Erro ao criar usuario:', authError.message);
           return new Response(
-            JSON.stringify({ error: `Erro ao criar usuario: ${authError.message}` }),
+            JSON.stringify({ error: 'Erro ao criar usuario' }),
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
       } else {
+        console.error('[EDGE] Erro ao criar usuario:', authError.message);
         return new Response(
-          JSON.stringify({ error: `Erro ao criar usuario: ${authError.message}` }),
+          JSON.stringify({ error: 'Erro ao criar usuario' }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -247,8 +354,9 @@ serve(async (req) => {
 
     if (embarcadorError) {
       await supabaseAdmin.auth.admin.deleteUser(authUserId);
+      console.error('[EDGE] Erro ao criar empresa:', embarcadorError.message);
       return new Response(
-        JSON.stringify({ error: `Erro ao criar empresa: ${embarcadorError.message}` }),
+        JSON.stringify({ error: 'Erro ao criar empresa' }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -266,8 +374,9 @@ serve(async (req) => {
     if (vinculoError) {
       await supabaseAdmin.auth.admin.deleteUser(authUserId);
       await supabaseAdmin.from("embarcadores").delete().eq("id", embarcador.id);
+      console.error('[EDGE] Erro ao vincular usuario:', vinculoError.message);
       return new Response(
-        JSON.stringify({ error: `Erro ao vincular usuario: ${vinculoError.message}` }),
+        JSON.stringify({ error: 'Erro ao vincular usuario' }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -275,7 +384,8 @@ serve(async (req) => {
     let emailEnviado = false;
     console.log('[EDGE] RESEND_API_KEY presente?', !!resendApiKey, resendApiKey ? resendApiKey.substring(0, 8) + '...' : 'VAZIO');
     if (resendApiKey) {
-      emailEnviado = await enviarEmailCredenciais(emailContato, senhaGerada, razaoSocial, resendApiKey);
+      // VULN-008: Sanitizar dados no email
+      emailEnviado = await enviarEmailCredenciais(emailContato, senhaGerada, sanitizeHtml(razaoSocial), resendApiKey);
       console.log('[EDGE] emailEnviado:', emailEnviado);
     } else {
       console.log('[EDGE] RESEND_API_KEY nao configurada, pulando envio de email');
@@ -292,8 +402,10 @@ serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
+    // VULN-009: Log detalhado no servidor, mensagem genérica ao cliente
+    console.error('[EDGE] Erro interno:', error);
     return new Response(
-      JSON.stringify({ error: `Erro interno: ${(error as Error).message}` }),
+      JSON.stringify({ error: 'Erro interno ao processar requisição' }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

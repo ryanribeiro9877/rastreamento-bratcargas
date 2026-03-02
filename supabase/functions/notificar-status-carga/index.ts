@@ -20,6 +20,26 @@ function getCorsHeaders(req: Request) {
 
 const VALID_STATUSES = ["aguardando", "em_transito", "entregue", "cancelada", "atrasado", "adiantado", "no_prazo"];
 
+// VULN-008: Sanitizar HTML para prevenir XSS em templates de email
+function sanitizeHtml(str: string | null): string {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// VULN-005: Rate limiting helper
+async function checkRateLimit(supabaseAdmin: any, functionName: string, identifier: string, maxRequests: number): Promise<boolean> {
+  try {
+    const { data, error } = await supabaseAdmin.rpc('check_rate_limit', {
+      p_function_name: functionName,
+      p_identifier: identifier,
+      p_max_requests: maxRequests,
+      p_window_minutes: 60
+    });
+    if (error) { console.error('[RATE] Erro:', error.message); return true; }
+    return data === true;
+  } catch { return true; }
+}
+
 interface StatusConfig {
   emoji: string;
   titulo: string;
@@ -239,6 +259,16 @@ serve(async (req) => {
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
+    // VULN-005: Rate limiting (50 requests/hora por IP)
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const allowed = await checkRateLimit(supabaseAdmin, 'notificar-status-carga', clientIp, 50);
+    if (!allowed) {
+      return new Response(
+        JSON.stringify({ error: "Muitas requisições. Tente novamente mais tarde." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { carga_id, status } = await req.json();
 
     if (!carga_id || !status) {
@@ -286,15 +316,16 @@ serve(async (req) => {
 
     const config = getStatusConfig(status);
     const subject = getSubjectLine(status, carga.nota_fiscal);
+    // VULN-008: Sanitizar dados antes de inserir no template HTML
     const html = gerarEmailHTML(
       config,
-      carga.nota_fiscal,
-      carga.origem_cidade,
-      carga.origem_uf,
-      carga.destino_cidade,
-      carga.destino_uf,
-      carga.motorista_nome,
-      empresa.razao_social,
+      sanitizeHtml(carga.nota_fiscal),
+      sanitizeHtml(carga.origem_cidade),
+      sanitizeHtml(carga.origem_uf),
+      sanitizeHtml(carga.destino_cidade),
+      sanitizeHtml(carga.destino_uf),
+      sanitizeHtml(carga.motorista_nome),
+      sanitizeHtml(empresa.razao_social),
     );
 
     // Enviar email via Resend
@@ -326,9 +357,10 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('[NOTIF] Erro:', error);
+    // VULN-009: Log detalhado no servidor, mensagem genérica ao cliente
+    console.error('[NOTIF] Erro interno:', error);
     return new Response(
-      JSON.stringify({ error: error.message || "Erro interno" }),
+      JSON.stringify({ error: "Erro interno ao processar notificação" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

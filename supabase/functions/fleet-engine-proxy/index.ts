@@ -18,6 +18,23 @@ function getCorsHeaders(req: Request) {
   };
 }
 
+// VULN-005: Rate limiting helper
+async function checkRateLimit(identifier: string, maxRequests: number): Promise<boolean> {
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    const { data, error } = await supabase.rpc('check_rate_limit', {
+      p_function_name: 'fleet-engine-proxy',
+      p_identifier: identifier,
+      p_max_requests: maxRequests,
+      p_window_minutes: 60
+    });
+    if (error) { console.error('[RATE] Erro:', error.message); return true; }
+    return data === true;
+  } catch { return true; }
+}
+
 interface FleetEngineConfig {
   projectId: string;
   providerId: string;
@@ -246,6 +263,16 @@ serve(async (req) => {
   }
 
   try {
+    // VULN-005: Rate limiting (50 requests/hora por IP)
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const allowed = await checkRateLimit(clientIp, 50);
+    if (!allowed) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Muitas requisições. Tente novamente mais tarde.' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const config: FleetEngineConfig = {
       projectId: Deno.env.get('FLEET_ENGINE_PROJECT_ID')!,
       providerId: Deno.env.get('FLEET_ENGINE_PROVIDER_ID')!,
@@ -305,8 +332,10 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
+    // VULN-009: Log detalhado no servidor, mensagem genérica ao cliente
+    console.error('[FLEET] Erro interno:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: 'Erro interno ao processar requisição' }),
       {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

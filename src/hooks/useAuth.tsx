@@ -185,7 +185,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
-    const { error } = await supabase.auth.signOut();
+    // VULN-012: Invalidar todas as sessões (global) ao fazer logout
+    const { error } = await supabase.auth.signOut({ scope: 'global' });
     if (error) throw error;
   }
 

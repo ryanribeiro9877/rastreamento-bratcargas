@@ -20,7 +20,7 @@ export function useInactivityTimeout() {
 
   const handleLogout = useCallback(async () => {
     try {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: 'global' });
       window.location.href = '/login';
     } catch (error) {
       console.error('Erro ao deslogar por inatividade:', error);

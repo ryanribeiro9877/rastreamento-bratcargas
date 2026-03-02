@@ -55,6 +55,7 @@ export default function RastreamentoMotorista() {
     precisao_metros: number;
     origem: string;
     timestamp: string;
+    token_rastreamento: string;
   };
   const gpsBufferRef = useRef<GpsPosicao[]>([]);
   const flushIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -79,16 +80,20 @@ export default function RastreamentoMotorista() {
     });
   }
 
-  // Adicionar posição ao buffer
+  // Adicionar posição ao buffer (com validação VULN-010)
   function bufferGpsPosition(cargaId: string, lat: number, lng: number, speed: number | null, accuracy: number) {
+    // VULN-010: Validar coordenadas dentro do Brasil
+    if (lat < -34 || lat > 6 || lng < -74 || lng > -34) return;
+    const safeSpeed = (speed !== null && speed >= 0 && speed <= 300) ? speed : null;
     gpsBufferRef.current.push({
       carga_id: cargaId,
       latitude: lat,
       longitude: lng,
-      velocidade: speed,
+      velocidade: safeSpeed,
       precisao_metros: accuracy,
       origem: 'api_rastreamento',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      token_rastreamento: token || ''
     });
   }
 
