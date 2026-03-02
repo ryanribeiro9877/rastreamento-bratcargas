@@ -167,7 +167,7 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
         }).catch(() => {});
         fetch(`${supabaseUrl}/functions/v1/notificar-status-carga`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({ carga_id: c.id, status: statusPrazoCalculado })
         }).catch(() => {});
       }
@@ -311,14 +311,17 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
       }).catch(err => console.error('Erro ao registrar histórico:', err));
 
       // Notificar empresa por email sobre entrega (fire-and-forget)
-      fetch(`${supabaseUrl}/functions/v1/notificar-status-carga`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({ carga_id: id, status: 'entregue' })
-      }).catch(() => {});
+      const notifToken = getAccessTokenSync();
+      if (notifToken) {
+        fetch(`${supabaseUrl}/functions/v1/notificar-status-carga`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${notifToken}`,
+          },
+          body: JSON.stringify({ carga_id: id, status: 'entregue' })
+        }).catch(() => {});
+      }
 
       // Disparar alerta de entrega
       await dispararAlertaEntrega(id);

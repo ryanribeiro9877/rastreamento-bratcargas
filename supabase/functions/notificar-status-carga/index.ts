@@ -257,7 +257,9 @@ serve(async (req) => {
       );
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
 
     // VULN-005: Rate limiting (50 requests/hora por IP)
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
@@ -269,7 +271,7 @@ serve(async (req) => {
       );
     }
 
-    const { carga_id, status } = await req.json();
+    const { carga_id, status, tracking_token } = await req.json();
 
     if (!carga_id || !status) {
       return new Response(
@@ -283,6 +285,45 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: "Status inválido" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Verificação de identidade do chamador:
+    // Aceita (1) usuário autenticado (cooperativa/embarcador) OU (2) tracking_token válido (motorista)
+    const authHeader = req.headers.get('Authorization');
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    let autorizado = false;
+
+    // Caminho 1: Usuário autenticado com JWT (não anon key)
+    if (authHeader && authHeader !== `Bearer ${anonKey}`) {
+      const supabaseCaller = createClient(supabaseUrl, anonKey!, {
+        global: { headers: { Authorization: authHeader } },
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      const { data: { user } } = await supabaseCaller.auth.getUser();
+      if (user) {
+        autorizado = true;
+      }
+    }
+
+    // Caminho 2: Tracking token válido para a carga (motorista)
+    if (!autorizado && tracking_token) {
+      const { data: link } = await supabaseAdmin
+        .from("links_rastreamento")
+        .select("id")
+        .eq("carga_id", carga_id)
+        .eq("token", tracking_token)
+        .eq("ativo", true)
+        .single();
+      if (link) {
+        autorizado = true;
+      }
+    }
+
+    if (!autorizado) {
+      return new Response(
+        JSON.stringify({ error: "Não autorizado" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

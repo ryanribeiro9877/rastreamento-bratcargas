@@ -134,7 +134,7 @@ export default function RastreamentoMotorista() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${SUPABASE_KEY}`,
         },
-        body: JSON.stringify({ carga_id: carga.id, status: 'entregue' })
+        body: JSON.stringify({ carga_id: carga.id, status: 'entregue', tracking_token: token })
       }).catch(() => {});
       // Parar rastreamento GPS e flush interval
       if (watchIdRef.current !== null) {
@@ -413,7 +413,7 @@ export default function RastreamentoMotorista() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${SUPABASE_KEY}`,
         },
-        body: JSON.stringify({ carga_id: carga.id, status: 'em_transito' })
+        body: JSON.stringify({ carga_id: carga.id, status: 'em_transito', tracking_token: token })
       }).catch(() => {});
 
       // Salvar posição inicial no buffer (será enviada no primeiro flush)

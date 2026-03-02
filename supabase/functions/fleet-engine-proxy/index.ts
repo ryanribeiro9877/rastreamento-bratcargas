@@ -263,6 +263,29 @@ serve(async (req) => {
   }
 
   try {
+    // Verificação de autenticação obrigatória
+    const authHeader = req.headers.get('Authorization');
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    if (!authHeader || authHeader === `Bearer ${anonKey}`) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Autenticação obrigatória' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseCaller = createClient(supabaseUrl, anonKey!, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data: { user } } = await supabaseCaller.auth.getUser();
+    if (!user) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Usuário não autenticado' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // VULN-005: Rate limiting (50 requests/hora por IP)
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
     const allowed = await checkRateLimit(clientIp, 50);

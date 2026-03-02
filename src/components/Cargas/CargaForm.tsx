@@ -231,7 +231,7 @@ export default function CargaForm({ embarcadorId, onSuccess, onCancel }: CargaFo
 
       fetch(`${supabaseUrl}/functions/v1/notificar-status-carga`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ carga_id: carga.id, status: 'aguardando' })
       }).catch(() => {});
 
