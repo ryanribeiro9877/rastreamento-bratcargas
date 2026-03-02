@@ -41,9 +41,9 @@ async function checkRateLimit(supabaseAdmin: any, functionName: string, identifi
       p_max_requests: maxRequests,
       p_window_minutes: 60
     });
-    if (error) { console.error('[RATE] Erro:', error.message); return true; }
+    if (error) { console.error('[RATE] Erro:', error.message); return false; }
     return data === true;
-  } catch { return true; }
+  } catch { return false; }
 }
 
 function gerarSenhaAleatoria(tamanho = 10): string {

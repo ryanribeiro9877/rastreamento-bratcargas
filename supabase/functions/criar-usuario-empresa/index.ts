@@ -57,9 +57,9 @@ async function checkRateLimit(supabaseAdmin: any, functionName: string, identifi
       p_max_requests: maxRequests,
       p_window_minutes: 60
     });
-    if (error) { console.error('[RATE] Erro:', error.message); return true; }
+    if (error) { console.error('[RATE] Erro:', error.message); return false; }
     return data === true;
-  } catch { return true; }
+  } catch { return false; }
 }
 
 function gerarSenhaAleatoria(tamanho = 10): string {
@@ -196,28 +196,38 @@ serve(async (req) => {
       );
     }
 
-    // VULN-007: Verificar que o chamador é cooperativa
+    // NOVA-VULN-002: Verificação OBRIGATÓRIA de que o chamador é cooperativa
     const authHeader = req.headers.get('Authorization');
-    if (authHeader && authHeader !== `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`) {
-      const supabaseCaller = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
-        global: { headers: { Authorization: authHeader } },
-        auth: { autoRefreshToken: false, persistSession: false },
-      });
-      const { data: { user: callerUser } } = await supabaseCaller.auth.getUser();
-      if (callerUser) {
-        const { data: isCooperativa } = await supabaseAdmin
-          .from('usuarios_cooperativa')
-          .select('id')
-          .eq('user_id', callerUser.id)
-          .eq('ativo', true)
-          .single();
-        if (!isCooperativa) {
-          return new Response(
-            JSON.stringify({ error: "Apenas a cooperativa pode criar empresas" }),
-            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-      }
+    if (!authHeader || authHeader === `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`) {
+      return new Response(
+        JSON.stringify({ error: "Autenticação obrigatória" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabaseCaller = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data: { user: callerUser } } = await supabaseCaller.auth.getUser();
+    if (!callerUser) {
+      return new Response(
+        JSON.stringify({ error: "Usuário não autenticado" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { data: isCooperativa } = await supabaseAdmin
+      .from('usuarios_cooperativa')
+      .select('id')
+      .eq('user_id', callerUser.id)
+      .eq('ativo', true)
+      .single();
+    if (!isCooperativa) {
+      return new Response(
+        JSON.stringify({ error: "Apenas a cooperativa pode criar empresas" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const body = await req.json();

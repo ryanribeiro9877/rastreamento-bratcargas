@@ -115,21 +115,16 @@ export default function RastreamentoMotorista() {
       // Enviar posições pendentes no buffer antes de finalizar
       flushGpsBuffer();
 
-      const entregaRes = await fetch(`${SUPABASE_URL}/rest/v1/cargas?id=eq.${carga.id}&link_rastreamento=eq.${token}`, {
-        method: 'PATCH',
+      // NOVA-VULN-003: Usar Edge Function dedicada ao invés de PATCH direto com anon key
+      const entregaRes = await fetch(`${SUPABASE_URL}/functions/v1/confirmar-entrega`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': SUPABASE_KEY,
           'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Prefer': 'return=minimal'
         },
-        body: JSON.stringify({
-          status: 'entregue',
-          data_entrega_real: new Date().toISOString(),
-          link_rastreamento: null
-        })
+        body: JSON.stringify({ carga_id: carga.id, token, action: 'confirmar_entrega' })
       });
-      if (!entregaRes.ok && import.meta.env.DEV) console.error('[MOTORISTA] PATCH entregue error');
+      if (!entregaRes.ok && import.meta.env.DEV) console.error('[MOTORISTA] confirmar-entrega error');
       setEntregue(true);
 
       // Notificar empresa por email sobre entrega (fire-and-forget)
@@ -401,16 +396,14 @@ export default function RastreamentoMotorista() {
       setPosicaoAtual(pos);
       setUltimaAtualizacao(new Date());
 
-      // 1) Mudar status para em_transito (filtro por token garante que só altera esta carga)
-      await fetch(`${SUPABASE_URL}/rest/v1/cargas?id=eq.${carga.id}&link_rastreamento=eq.${token}`, {
-        method: 'PATCH',
+      // NOVA-VULN-003: Usar Edge Function ao invés de PATCH direto com anon key
+      await fetch(`${SUPABASE_URL}/functions/v1/confirmar-entrega`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': SUPABASE_KEY,
           'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Prefer': 'return=minimal'
         },
-        body: JSON.stringify({ status: 'em_transito' })
+        body: JSON.stringify({ carga_id: carga.id, token, action: 'iniciar_transito' })
       });
 
       // Notificar empresa que carga entrou em trânsito (fire-and-forget)

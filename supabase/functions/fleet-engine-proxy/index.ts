@@ -30,9 +30,9 @@ async function checkRateLimit(identifier: string, maxRequests: number): Promise<
       p_max_requests: maxRequests,
       p_window_minutes: 60
     });
-    if (error) { console.error('[RATE] Erro:', error.message); return true; }
+    if (error) { console.error('[RATE] Erro:', error.message); return false; }
     return data === true;
-  } catch { return true; }
+  } catch { return false; }
 }
 
 interface FleetEngineConfig {

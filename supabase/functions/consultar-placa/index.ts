@@ -28,9 +28,9 @@ async function checkRateLimitPlaca(identifier: string, maxRequests: number): Pro
       p_max_requests: maxRequests,
       p_window_minutes: 60
     });
-    if (error) { console.error('[RATE] Erro:', error.message); return true; }
+    if (error) { console.error('[RATE] Erro:', error.message); return false; }
     return data === true;
-  } catch { return true; }
+  } catch { return false; }
 }
 
 const PLACA_REGEX = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/i;
