@@ -14,7 +14,7 @@ interface AuthState {
 }
 
 interface AuthContextType extends AuthState {
-  signIn: (email: string, password: string) => Promise<any>;
+  signIn: (email: string, password: string, captchaToken?: string) => Promise<any>;
   signUp: (email: string, password: string, nome: string) => Promise<any>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -161,10 +161,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function signIn(email: string, password: string) {
+  async function signIn(email: string, password: string, captchaToken?: string) {
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
-      password
+      password,
+      options: captchaToken ? { captchaToken } : undefined
     });
 
     if (error) throw error;

@@ -19,6 +19,7 @@ function traduzirErro(mensagem: string): string {
     'Unable to validate email address: invalid format': 'Formato de email inválido',
     'Email rate limit exceeded': 'Limite de envio de emails excedido. Tente novamente mais tarde.',
     'For security purposes, you can only request this once every 60 seconds': 'Por segurança, aguarde 60 segundos antes de tentar novamente.',
+    'captcha verification process failed': 'Falha na verificação do captcha. Tente novamente.',
   };
 
   for (const [ingles, portugues] of Object.entries(traducoes)) {
@@ -70,7 +71,7 @@ export default function Login() {
       setLoading(true);
       setError('');
       
-      await signIn(email, password);
+      await signIn(email, password, captchaToken);
       navigate('/dashboard');
     } catch (err: any) {
       console.error('Erro no login:', err);
