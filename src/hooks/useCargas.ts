@@ -407,8 +407,16 @@ export function useCargas(embarcadorId?: string, filtros?: FiltrosCargas) {
         throw new Error(`Erro ao excluir carga: ${deleteResponse.status} - ${errBody}`);
       }
 
-      queryClient.invalidateQueries({ queryKey: ['cargas'] });
-      queryClient.invalidateQueries({ queryKey: ['metricas'] });
+      // Optimistic update: remover carga do cache imediatamente
+      queryClient.setQueriesData<Carga[]>({ queryKey: ['cargas'] }, (old) =>
+        old ? old.filter(c => c.id !== id) : []
+      );
+
+      // Invalidar para refetch em background (garante consistência)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['cargas'] }),
+        queryClient.invalidateQueries({ queryKey: ['metricas'] }),
+      ]);
     } catch (err) {
       console.error('Erro ao excluir carga:', err);
       throw err;

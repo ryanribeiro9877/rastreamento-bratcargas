@@ -1,6 +1,7 @@
 // components/Cooperativa/EmpresasModal.tsx - Modal de empresas para cooperativa
 
 import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../services/supabase';
 import { useCargas } from '../../hooks/useCargas';
 import { formatarData, formatarToneladas, formatarCNPJ } from '../../utils/formatters';
@@ -30,6 +31,7 @@ interface EmpresasModalProps {
 
 export default function EmpresasModal({ onClose }: EmpresasModalProps) {
   const isDark = false; // Tema fixo claro
+  const queryClient = useQueryClient();
   const [empresas, setEmpresas] = useState<Embarcador[]>([]);
   const [loading, setLoading] = useState(true);
   const [empresaSelecionada, setEmpresaSelecionada] = useState<Embarcador | null>(null);
@@ -94,6 +96,12 @@ export default function EmpresasModal({ onClose }: EmpresasModalProps) {
         }
       }
       
+      // Invalidar caches do dashboard (cargas, métricas)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['cargas'] }),
+        queryClient.invalidateQueries({ queryKey: ['metricas'] }),
+      ]);
+
       alert('Empresa excluída com sucesso!');
       setEmpresaSelecionada(null);
       carregarEmpresas();

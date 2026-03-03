@@ -92,9 +92,8 @@ export default function CooperativaDashboard() {
     
     try {
       await excluirCarga(cargaId);
-      refetchMetricas(); // Atualizar métricas após exclusão
-      alert('Carga excluída com sucesso!');
       setCargaSelecionada(null);
+      alert('Carga excluída com sucesso!');
     } catch (error) {
       alert('Erro ao excluir carga');
     }
