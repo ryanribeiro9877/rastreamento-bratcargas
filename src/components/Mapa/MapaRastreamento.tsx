@@ -146,20 +146,41 @@ export default function MapaRastreamento({
     markersRef.current.forEach(marker => marker.remove());
     markersRef.current.clear();
 
-    // Adicionar novos marcadores
+    // Preparar cargas com suas coordenadas base
+    const cargasComCoords: { carga: Carga; lat: number; lng: number; naOrigem: boolean }[] = [];
     cargas.forEach(carga => {
       const posicao = carga.ultima_posicao;
-      
       if (!posicao) {
-        // Se não tem posição, mostrar na origem (se tiver coordenadas)
         if (carga.origem_lat != null && carga.origem_lng != null) {
-          adicionarMarcador(map, carga, carga.origem_lat, carga.origem_lng, true);
+          cargasComCoords.push({ carga, lat: carga.origem_lat, lng: carga.origem_lng, naOrigem: true });
         }
-        return;
+      } else {
+        cargasComCoords.push({ carga, lat: posicao.latitude, lng: posicao.longitude, naOrigem: false });
       }
+    });
 
-      // Mostrar na última posição conhecida
-      adicionarMarcador(map, carga, posicao.latitude, posicao.longitude, false);
+    // Agrupar por coordenadas iguais (arredondando para 4 casas decimais)
+    const grupos = new Map<string, typeof cargasComCoords>();
+    cargasComCoords.forEach(item => {
+      const chave = `${item.lat.toFixed(4)},${item.lng.toFixed(4)}`;
+      if (!grupos.has(chave)) grupos.set(chave, []);
+      grupos.get(chave)!.push(item);
+    });
+
+    // Adicionar marcadores com offset circular para coordenadas duplicadas
+    grupos.forEach(grupo => {
+      if (grupo.length === 1) {
+        const { carga, lat, lng, naOrigem } = grupo[0];
+        adicionarMarcador(map, carga, lat, lng, naOrigem);
+      } else {
+        const OFFSET = 0.003; // ~300m de raio para espalhar os marcadores
+        grupo.forEach((item, i) => {
+          const angulo = (2 * Math.PI * i) / grupo.length;
+          const offsetLat = item.lat + OFFSET * Math.cos(angulo);
+          const offsetLng = item.lng + OFFSET * Math.sin(angulo);
+          adicionarMarcador(map, item.carga, offsetLat, offsetLng, item.naOrigem);
+        });
+      }
     });
 
     // Ajustar zoom para mostrar todos os marcadores
