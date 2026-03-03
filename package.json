@@ -11,6 +11,7 @@
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
+    "@hcaptcha/react-hcaptcha": "^2.0.2",
     "@sentry/react": "^10.40.0",
     "@sentry/vite-plugin": "^5.1.1",
     "@supabase/supabase-js": "^2.39.0",

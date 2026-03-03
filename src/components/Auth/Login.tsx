@@ -1,8 +1,9 @@
 // components/Auth/Login.tsx - Componente de Login
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 // Função para traduzir mensagens de erro do Supabase
 function traduzirErro(mensagem: string): string {
@@ -35,6 +36,8 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showResetPassword, setShowResetPassword] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRef = useRef<HCaptcha>(null);
   
   const { signIn, resetPassword } = useAuth();
   const navigate = useNavigate();
@@ -58,6 +61,11 @@ export default function Login() {
       return;
     }
 
+    if (!captchaToken) {
+      setError('Por favor, complete a verificação de segurança');
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
@@ -67,6 +75,10 @@ export default function Login() {
     } catch (err: any) {
       console.error('Erro no login:', err);
       setError(traduzirErro(err.message || 'Erro ao fazer login. Verifique suas credenciais.'));
+      
+      // Reset captcha em caso de erro
+      setCaptchaToken(null);
+      captchaRef.current?.resetCaptcha();
     } finally {
       setLoading(false);
     }
@@ -164,9 +176,22 @@ export default function Login() {
                 </div>
               )}
 
+              <div className="flex justify-center">
+                <HCaptcha
+                  sitekey={import.meta.env.VITE_HCAPTCHA_SITE_KEY}
+                  onVerify={(token) => setCaptchaToken(token)}
+                  onExpire={() => setCaptchaToken(null)}
+                  onError={() => {
+                    setCaptchaToken(null);
+                    setError('Erro ao carregar verificação de segurança. Recarregue a página.');
+                  }}
+                  ref={captchaRef}
+                />
+              </div>
+
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !captchaToken}
                 className="w-full bg-[#009440] hover:bg-[#007a35] text-white font-semibold py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
