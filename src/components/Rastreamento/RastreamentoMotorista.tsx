@@ -372,6 +372,61 @@ export default function RastreamentoMotorista() {
     }
   }, [carga, fetchRoute]);
 
+  // Auto-skip autorização: se carga já está em_transito, ir direto pro mapa
+  useEffect(() => {
+    if (!carga || loading || etapa === 'mapa') return;
+    if (carga.status !== 'em_transito') return;
+
+    let cancelled = false;
+
+    async function autoIniciarMapa() {
+      try {
+        const posicao = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 60000
+          });
+        });
+
+        if (cancelled) return;
+
+        const pos = { lat: posicao.coords.latitude, lng: posicao.coords.longitude };
+        setPosicaoAtual(pos);
+        setUltimaAtualizacao(new Date());
+
+        // Salvar posição e iniciar buffer
+        bufferGpsPosition(carga.id, pos.lat, pos.lng, posicao.coords.speed, posicao.coords.accuracy);
+        flushGpsBuffer();
+        flushIntervalRef.current = setInterval(flushGpsBuffer, GPS_FLUSH_INTERVAL);
+
+        // Iniciar watch contínuo
+        const watchId = navigator.geolocation.watchPosition(
+          (newPos) => {
+            const newLatLng = { lat: newPos.coords.latitude, lng: newPos.coords.longitude };
+            setPosicaoAtual(newLatLng);
+            setUltimaAtualizacao(new Date());
+            atualizarPosicaoNoMapa(newLatLng.lat, newLatLng.lng);
+            verificarChegadaDestino(newLatLng.lat, newLatLng.lng);
+            bufferGpsPosition(carga.id, newLatLng.lat, newLatLng.lng, newPos.coords.speed, newPos.coords.accuracy);
+          },
+          (err) => console.error('Erro watch position:', err),
+          { enableHighAccuracy: true, maximumAge: 30000 }
+        );
+        watchIdRef.current = watchId;
+
+        setEtapa('mapa');
+      } catch {
+        // Se não conseguir geolocalização, manter na tela de autorização
+        console.log('Auto-skip falhou, mantendo tela de autorização');
+      }
+    }
+
+    autoIniciarMapa();
+
+    return () => { cancelled = true; };
+  }, [carga, loading, etapa, atualizarPosicaoNoMapa]);
+
   // Autorizar e iniciar rastreamento
   async function handleAutorizar() {
     if (!token || !carga) return;
