@@ -1,4 +1,4 @@
-// components/Rastreamento/RastreamentoMotorista.tsx - Página Pública para Motorista
+﻿// components/Rastreamento/RastreamentoMotorista.tsx - PÃ¡gina PÃºblica para Motorista
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
@@ -44,9 +44,9 @@ export default function RastreamentoMotorista() {
   const routeLayerRef = useRef<L.Polyline | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const lastRouteUpdateRef = useRef<number>(0);
-  const ROUTE_UPDATE_INTERVAL = 30000; // Atualizar rota a cada 30s (estilo Uber/iFood)
+  const ROUTE_UPDATE_INTERVAL = 300000; // Atualizar rota a cada 5min (otimização de custo)
 
-  // Buffer local de posições GPS (V13 - reduz latência e perda de dados)
+  // Buffer local de posiÃ§Ãµes GPS (V13 - reduz latÃªncia e perda de dados)
   type GpsPosicao = {
     carga_id: string;
     latitude: number;
@@ -59,9 +59,9 @@ export default function RastreamentoMotorista() {
   };
   const gpsBufferRef = useRef<GpsPosicao[]>([]);
   const flushIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const GPS_FLUSH_INTERVAL = 30000; // Enviar posições em lote a cada 30s
+  const GPS_FLUSH_INTERVAL = 300000; // Enviar posicoes em lote a cada 5min (otimizacao de custo)
 
-  // Enviar buffer de posições GPS em lote
+  // Enviar buffer de posiÃ§Ãµes GPS em lote
   function flushGpsBuffer() {
     if (gpsBufferRef.current.length === 0) return;
     const batch = [...gpsBufferRef.current];
@@ -80,7 +80,7 @@ export default function RastreamentoMotorista() {
     });
   }
 
-  // Adicionar posição ao buffer (com validação VULN-010)
+  // Adicionar posiÃ§Ã£o ao buffer (com validaÃ§Ã£o VULN-010)
   function bufferGpsPosition(cargaId: string, lat: number, lng: number, speed: number | null, accuracy: number) {
     // VULN-010: Validar coordenadas dentro do Brasil
     if (lat < -34 || lat > 6 || lng < -74 || lng > -34) return;
@@ -97,7 +97,7 @@ export default function RastreamentoMotorista() {
     });
   }
 
-  // Calcular distância entre dois pontos (Haversine)
+  // Calcular distÃ¢ncia entre dois pontos (Haversine)
   function calcularDistanciaLocal(lat1: number, lng1: number, lat2: number, lng2: number): number {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -112,10 +112,10 @@ export default function RastreamentoMotorista() {
     entregueRef.current = true;
     setConfirmandoEntrega(true);
     try {
-      // Enviar posições pendentes no buffer antes de finalizar
+      // Enviar posiÃ§Ãµes pendentes no buffer antes de finalizar
       flushGpsBuffer();
 
-      // NOVA-VULN-003: Usar Edge Function dedicada ao invés de PATCH direto com anon key
+      // NOVA-VULN-003: Usar Edge Function dedicada ao invÃ©s de PATCH direto com anon key
       const entregaRes = await fetch(`${SUPABASE_URL}/functions/v1/confirmar-entrega`, {
         method: 'POST',
         headers: {
@@ -153,16 +153,16 @@ export default function RastreamentoMotorista() {
     }
   }
 
-  // Verificar proximidade do destino (apenas informativo, sem entrega automática)
+  // Verificar proximidade do destino (apenas informativo, sem entrega automÃ¡tica)
   function verificarChegadaDestino(_lat: number, _lng: number) {
-    // S11: Entrega automática por GPS removida (vulnerável a spoofing)
-    // Motorista deve confirmar entrega manualmente via botão
+    // S11: Entrega automÃ¡tica por GPS removida (vulnerÃ¡vel a spoofing)
+    // Motorista deve confirmar entrega manualmente via botÃ£o
   }
 
-  // Buscar carga pelo token (público, sem auth)
+  // Buscar carga pelo token (pÃºblico, sem auth)
   useEffect(() => {
     if (!token) {
-      setError('Link inválido');
+      setError('Link invÃ¡lido');
       setLoading(false);
       return;
     }
@@ -183,9 +183,9 @@ export default function RastreamentoMotorista() {
           throw new Error('Erro ao carregar dados');
         }
         const rows = await response.json();
-        if (!rows?.length) throw new Error('Link expirado ou inválido');
+        if (!rows?.length) throw new Error('Link expirado ou invÃ¡lido');
 
-        // S12: Validar expiração — rejeitar tokens de cargas com prazo > 7 dias atrás
+        // S12: Validar expiraÃ§Ã£o â€” rejeitar tokens de cargas com prazo > 7 dias atrÃ¡s
         const cargaData = rows[0];
         if (cargaData.prazo_entrega) {
           const prazo = new Date(cargaData.prazo_entrega);
@@ -198,7 +198,7 @@ export default function RastreamentoMotorista() {
 
         setCarga(cargaData);
       } catch (err: any) {
-        setError(err.message || 'Erro ao carregar informações');
+        setError(err.message || 'Erro ao carregar informaÃ§Ãµes');
       } finally {
         setLoading(false);
       }
@@ -207,7 +207,7 @@ export default function RastreamentoMotorista() {
     carregarCarga();
   }, [token]);
 
-  // Geocodificar destino se não tiver lat/lng
+  // Geocodificar destino se nÃ£o tiver lat/lng
   const geocodeDestino = useCallback(async (cidade: string, uf: string): Promise<{ lat: number; lng: number } | null> => {
     if (!MAPBOX_TOKEN) return null;
     try {
@@ -266,7 +266,7 @@ export default function RastreamentoMotorista() {
       maxZoom: 19
     }).addTo(map);
 
-    // Marcador do motorista (verde com ícone de caminhão)
+    // Marcador do motorista (verde com Ã­cone de caminhÃ£o)
     const motoristaIcon = L.divIcon({
       className: '',
       html: `<div style="position:relative;width:48px;height:48px;">
@@ -284,7 +284,7 @@ export default function RastreamentoMotorista() {
 
     const motoristaMarker = L.marker([motorista.lat, motorista.lng], { icon: motoristaIcon })
       .addTo(map)
-      .bindPopup('Sua localização');
+      .bindPopup('Sua localizaÃ§Ã£o');
 
     motoristaMarkerRef.current = motoristaMarker;
     mapRef.current = map;
@@ -331,19 +331,19 @@ export default function RastreamentoMotorista() {
       }
     }
 
-    // Forçar resize
+    // ForÃ§ar resize
     setTimeout(() => map.invalidateSize(), 200);
   }, [carga, geocodeDestino, fetchRoute]);
 
-  // Atualizar posição do motorista no mapa
+  // Atualizar posiÃ§Ã£o do motorista no mapa
   const atualizarPosicaoNoMapa = useCallback(async (lat: number, lng: number) => {
     if (motoristaMarkerRef.current) {
       motoristaMarkerRef.current.setLatLng([lat, lng]);
     }
 
-    // Atualizar rota com throttle (a cada 30s) — estilo Uber/iFood
-    // A rota é recalculada da posição ATUAL até o destino,
-    // fazendo o trecho já percorrido desaparecer naturalmente
+    // Atualizar rota com throttle (a cada 30s) â€” estilo Uber/iFood
+    // A rota Ã© recalculada da posiÃ§Ã£o ATUAL atÃ© o destino,
+    // fazendo o trecho jÃ¡ percorrido desaparecer naturalmente
     const now = Date.now();
     if (now - lastRouteUpdateRef.current < ROUTE_UPDATE_INTERVAL) return;
     lastRouteUpdateRef.current = now;
@@ -372,7 +372,7 @@ export default function RastreamentoMotorista() {
     }
   }, [carga, fetchRoute]);
 
-  // Auto-skip autorização: se carga já está em_transito, ir direto pro mapa
+  // Auto-skip autorizaÃ§Ã£o: se carga jÃ¡ estÃ¡ em_transito, ir direto pro mapa
   useEffect(() => {
     if (!carga || loading || etapa === 'mapa') return;
     if (carga.status !== 'em_transito') return;
@@ -395,12 +395,12 @@ export default function RastreamentoMotorista() {
         setPosicaoAtual(pos);
         setUltimaAtualizacao(new Date());
 
-        // Salvar posição e iniciar buffer
+        // Salvar posiÃ§Ã£o e iniciar buffer
         bufferGpsPosition(carga.id, pos.lat, pos.lng, posicao.coords.speed, posicao.coords.accuracy);
         flushGpsBuffer();
         flushIntervalRef.current = setInterval(flushGpsBuffer, GPS_FLUSH_INTERVAL);
 
-        // Iniciar watch contínuo
+        // Iniciar watch contÃ­nuo
         const watchId = navigator.geolocation.watchPosition(
           (newPos) => {
             const newLatLng = { lat: newPos.coords.latitude, lng: newPos.coords.longitude };
@@ -417,8 +417,8 @@ export default function RastreamentoMotorista() {
 
         setEtapa('mapa');
       } catch {
-        // Se não conseguir geolocalização, manter na tela de autorização
-        console.log('Auto-skip falhou, mantendo tela de autorização');
+        // Se nÃ£o conseguir geolocalizaÃ§Ã£o, manter na tela de autorizaÃ§Ã£o
+        console.log('Auto-skip falhou, mantendo tela de autorizaÃ§Ã£o');
       }
     }
 
@@ -435,7 +435,7 @@ export default function RastreamentoMotorista() {
       setAutorizando(true);
       setError('');
 
-      // Pedir permissão de geolocalização
+      // Pedir permissÃ£o de geolocalizaÃ§Ã£o
       const posicao = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: true,
@@ -451,7 +451,7 @@ export default function RastreamentoMotorista() {
       setPosicaoAtual(pos);
       setUltimaAtualizacao(new Date());
 
-      // NOVA-VULN-003: Usar Edge Function ao invés de PATCH direto com anon key
+      // NOVA-VULN-003: Usar Edge Function ao invÃ©s de PATCH direto com anon key
       await fetch(`${SUPABASE_URL}/functions/v1/confirmar-entrega`, {
         method: 'POST',
         headers: {
@@ -461,7 +461,7 @@ export default function RastreamentoMotorista() {
         body: JSON.stringify({ carga_id: carga.id, token, action: 'iniciar_transito' })
       });
 
-      // Notificar empresa que carga entrou em trânsito (fire-and-forget)
+      // Notificar empresa que carga entrou em trÃ¢nsito (fire-and-forget)
       fetch(`${SUPABASE_URL}/functions/v1/notificar-status-carga`, {
         method: 'POST',
         headers: {
@@ -471,18 +471,18 @@ export default function RastreamentoMotorista() {
         body: JSON.stringify({ carga_id: carga.id, status: 'em_transito', tracking_token: token })
       }).catch(() => {});
 
-      // Salvar posição inicial no buffer (será enviada no primeiro flush)
+      // Salvar posiÃ§Ã£o inicial no buffer (serÃ¡ enviada no primeiro flush)
       bufferGpsPosition(carga.id, pos.lat, pos.lng, posicao.coords.speed, posicao.coords.accuracy);
-      // Enviar posição inicial imediatamente
+      // Enviar posiÃ§Ã£o inicial imediatamente
       flushGpsBuffer();
 
-      // Iniciar flush periódico do buffer GPS
+      // Iniciar flush periÃ³dico do buffer GPS
       flushIntervalRef.current = setInterval(flushGpsBuffer, GPS_FLUSH_INTERVAL);
 
       // Mudar para tela do mapa
       setEtapa('mapa');
 
-      // Iniciar watch contínuo
+      // Iniciar watch contÃ­nuo
       const watchId = navigator.geolocation.watchPosition(
         (newPos) => {
           const newLatLng = { lat: newPos.coords.latitude, lng: newPos.coords.longitude };
@@ -503,11 +503,11 @@ export default function RastreamentoMotorista() {
 
     } catch (err: any) {
       if (err.code === 1) {
-        setError('Permissão de localização negada. Habilite nas configurações do navegador.');
+        setError('PermissÃ£o de localizaÃ§Ã£o negada. Habilite nas configuraÃ§Ãµes do navegador.');
       } else if (err.code === 2) {
-        setError('Não foi possível obter sua localização. Verifique se o GPS está ativado.');
+        setError('NÃ£o foi possÃ­vel obter sua localizaÃ§Ã£o. Verifique se o GPS estÃ¡ ativado.');
       } else if (err.code === 3) {
-        setError('Tempo esgotado ao obter localização. Tente novamente.');
+        setError('Tempo esgotado ao obter localizaÃ§Ã£o. Tente novamente.');
       } else {
         setError(err.message || 'Erro ao iniciar rastreamento');
       }
@@ -519,7 +519,7 @@ export default function RastreamentoMotorista() {
   // Inicializar mapa quando mudar para etapa 'mapa'
   useEffect(() => {
     if (etapa === 'mapa' && posicaoAtual && !mapRef.current) {
-      // Pequeno delay para garantir que o container está renderizado
+      // Pequeno delay para garantir que o container estÃ¡ renderizado
       setTimeout(() => initMap(posicaoAtual), 100);
     }
   }, [etapa, posicaoAtual, initMap]);
@@ -527,7 +527,7 @@ export default function RastreamentoMotorista() {
   // Cleanup
   useEffect(() => {
     return () => {
-      // Enviar posições pendentes antes de sair
+      // Enviar posiÃ§Ãµes pendentes antes de sair
       flushGpsBuffer();
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
@@ -548,7 +548,7 @@ export default function RastreamentoMotorista() {
       <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl p-8 text-center">
           <div className="animate-spin h-12 w-12 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
-          <p className="text-gray-600">Carregando informações...</p>
+          <p className="text-gray-600">Carregando informaÃ§Ãµes...</p>
         </div>
       </div>
     );
@@ -569,7 +569,7 @@ export default function RastreamentoMotorista() {
     );
   }
 
-  // --- TELA DO MAPA (após autorização) ---
+  // --- TELA DO MAPA (apÃ³s autorizaÃ§Ã£o) ---
   if (etapa === 'mapa' && carga) {
     return (
       <div className="h-screen flex flex-col bg-gray-100">
@@ -589,7 +589,7 @@ export default function RastreamentoMotorista() {
           <div ref={mapContainerRef} className="absolute inset-0" />
         </div>
 
-        {/* Painel inferior com informações */}
+        {/* Painel inferior com informaÃ§Ãµes */}
         <div className="bg-white shadow-[0_-4px_12px_rgba(0,0,0,0.1)] rounded-t-2xl px-4 py-4 flex-shrink-0">
           {/* Rota */}
           <div className="flex items-center gap-3 mb-3">
@@ -600,7 +600,7 @@ export default function RastreamentoMotorista() {
             </div>
             <div className="flex-1">
               <div className="text-sm font-medium text-gray-900">{carga.origem_cidade}/{carga.origem_uf}</div>
-              <div className="text-xs text-gray-400 my-0.5">em trânsito</div>
+              <div className="text-xs text-gray-400 my-0.5">em trÃ¢nsito</div>
               <div className="text-sm font-medium text-gray-900">{carga.destino_cidade}/{carga.destino_uf}</div>
             </div>
           </div>
@@ -608,20 +608,20 @@ export default function RastreamentoMotorista() {
           {/* Datas */}
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div className="bg-blue-50 rounded-lg p-2.5">
-              <div className="text-[10px] uppercase tracking-wider text-blue-600 font-semibold">Saída</div>
+              <div className="text-[10px] uppercase tracking-wider text-blue-600 font-semibold">SaÃ­da</div>
               <div className="text-xs font-bold text-gray-900 mt-0.5">
                 {carga.data_carregamento ? formatarDataHora(carga.data_carregamento) : '-'}
               </div>
             </div>
             <div className="bg-green-50 rounded-lg p-2.5">
-              <div className="text-[10px] uppercase tracking-wider text-green-600 font-semibold">Previsão de Chegada</div>
+              <div className="text-[10px] uppercase tracking-wider text-green-600 font-semibold">PrevisÃ£o de Chegada</div>
               <div className="text-xs font-bold text-gray-900 mt-0.5">
                 {carga.prazo_entrega ? formatarDataHora(carga.prazo_entrega) : '-'}
               </div>
             </div>
           </div>
 
-          {/* Botão Confirmar Entrega */}
+          {/* BotÃ£o Confirmar Entrega */}
           {!entregue ? (
             <button
               onClick={confirmarEntrega}
@@ -652,10 +652,10 @@ export default function RastreamentoMotorista() {
             </div>
           )}
 
-          {/* Última atualização */}
+          {/* Ãšltima atualizaÃ§Ã£o */}
           {ultimaAtualizacao && (
             <div className="text-center text-[10px] text-gray-400 mt-2">
-              Última atualização: {ultimaAtualizacao.toLocaleTimeString('pt-BR')}
+              Ãšltima atualizaÃ§Ã£o: {ultimaAtualizacao.toLocaleTimeString('pt-BR')}
             </div>
           )}
         </div>
@@ -663,7 +663,7 @@ export default function RastreamentoMotorista() {
     );
   }
 
-  // --- TELA DE AUTORIZAÇÃO (padrão) ---
+  // --- TELA DE AUTORIZAÃ‡ÃƒO (padrÃ£o) ---
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
@@ -681,10 +681,10 @@ export default function RastreamentoMotorista() {
           </div>
 
           <div className="p-6">
-            {/* Saudação */}
+            {/* SaudaÃ§Ã£o */}
             {carga?.motorista_nome && (
               <p className="text-center text-gray-700 mb-4">
-                Olá, <span className="font-semibold">{carga.motorista_nome}</span>!
+                OlÃ¡, <span className="font-semibold">{carga.motorista_nome}</span>!
               </p>
             )}
 
@@ -707,13 +707,13 @@ export default function RastreamentoMotorista() {
               </div>
               <div className="border-t pt-3 grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <span className="text-gray-500">Saída:</span>
+                  <span className="text-gray-500">SaÃ­da:</span>
                   <div className="font-semibold text-gray-800">
                     {carga?.data_carregamento ? formatarDataHora(carga.data_carregamento) : '-'}
                   </div>
                 </div>
                 <div>
-                  <span className="text-gray-500">Previsão:</span>
+                  <span className="text-gray-500">PrevisÃ£o:</span>
                   <div className="font-semibold text-gray-800">
                     {carga?.prazo_entrega ? formatarDataHora(carga.prazo_entrega) : '-'}
                   </div>
@@ -728,7 +728,7 @@ export default function RastreamentoMotorista() {
               </div>
             )}
 
-            {/* Botão de autorizar */}
+            {/* BotÃ£o de autorizar */}
             {(carga?.status === 'aguardando' || carga?.status === 'em_transito') ? (
               <>
                 <button
@@ -747,13 +747,13 @@ export default function RastreamentoMotorista() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
-                      Autorizar Localização
+                      Autorizar LocalizaÃ§Ã£o
                     </>
                   )}
                 </button>
 
                 <p className="text-center text-xs text-gray-400 mt-3">
-                  Ao autorizar, sua localização será compartilhada em tempo real para acompanhamento da entrega.
+                  Ao autorizar, sua localizaÃ§Ã£o serÃ¡ compartilhada em tempo real para acompanhamento da entrega.
                 </p>
               </>
             ) : (
