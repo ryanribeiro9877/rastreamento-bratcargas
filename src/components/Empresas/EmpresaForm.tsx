@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { buscarEnderecoPorCep, formatarCep } from '../../services/viaCep';
+import { supabase } from '../../services/supabase';
 
 interface EmpresaFormProps {
   onSuccess?: () => void;
@@ -110,6 +111,12 @@ export default function EmpresaForm({ onSuccess, onCancel }: EmpresaFormProps) {
 
       console.log('Iniciando cadastro...');
       
+      // Obter token de sessão do usuário logado
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Você precisa estar logado para cadastrar uma empresa');
+      }
+
       // Chamar Edge Function para criar empresa e usuário
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/criar-usuario-empresa`,
@@ -117,7 +124,7 @@ export default function EmpresaForm({ onSuccess, onCancel }: EmpresaFormProps) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Authorization': `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
             razao_social: formData.razao_social.trim(),
