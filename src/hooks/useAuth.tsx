@@ -11,6 +11,7 @@ interface AuthState {
   loading: boolean;
   isCooperativa: boolean;
   isEmbarcador: boolean;
+  isPrincipal: boolean;
 }
 
 interface AuthContextType extends AuthState {
@@ -29,7 +30,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     profile: null,
     loading: true,
     isCooperativa: false,
-    isEmbarcador: false
+    isEmbarcador: false,
+    isPrincipal: false
   });
 
   useEffect(() => {
@@ -56,7 +58,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           profile: null,
           loading: false,
           isCooperativa: false,
-          isEmbarcador: false
+          isEmbarcador: false,
+          isPrincipal: false
         });
         return;
       }
@@ -69,7 +72,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           profile: null,
           loading: false,
           isCooperativa: false,
-          isEmbarcador: false
+          isEmbarcador: false,
+          isPrincipal: false
         });
       }
     }).catch((err) => {
@@ -81,7 +85,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           profile: null,
           loading: false,
           isCooperativa: false,
-          isEmbarcador: false
+          isEmbarcador: false,
+          isPrincipal: false
         });
       }
     });
@@ -104,7 +109,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           profile: null,
           loading: false,
           isCooperativa: false,
-          isEmbarcador: false
+          isEmbarcador: false,
+          isPrincipal: false
         });
       }
     });
@@ -121,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Verificar se é usuário da cooperativa (admin)
       const { data: adminCheck, error: adminError } = await supabase
         .from('usuarios_cooperativa')
-        .select('id')
+        .select('id, is_principal')
         .eq('user_id', user.id)
         .maybeSingle();
 
@@ -135,7 +141,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           profile: null,
           loading: false,
           isCooperativa: true,
-          isEmbarcador: false
+          isEmbarcador: false,
+          isPrincipal: adminCheck.is_principal === true
         });
         return;
       }
@@ -147,7 +154,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile,
         loading: false,
         isCooperativa: false,
-        isEmbarcador: Boolean(profile)
+        isEmbarcador: Boolean(profile),
+        isPrincipal: false
       });
     } catch (error) {
       console.error('Erro ao carregar perfil:', error);
@@ -156,7 +164,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile: null,
         loading: false,
         isCooperativa: false,
-        isEmbarcador: false
+        isEmbarcador: false,
+        isPrincipal: false
       });
     }
   }
