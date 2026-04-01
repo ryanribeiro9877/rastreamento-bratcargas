@@ -8,6 +8,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const ALLOWED_ORIGINS = [
   "https://rastreamentobrat.com.br",
   "https://www.rastreamentobrat.com.br",
+  "http://localhost:5173",
+  "http://localhost:5174",
 ];
 
 function getCorsHeaders(req: Request) {

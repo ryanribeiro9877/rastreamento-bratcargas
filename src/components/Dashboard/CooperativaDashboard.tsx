@@ -16,6 +16,7 @@ import EmpresaForm from '../Empresas/EmpresaForm';
 import CargasModal from '../Cooperativa/CargasModal';
 import EmpresasModal from '../Cooperativa/EmpresasModal';
 import ConfiguracoesModal from '../Usuario/ConfiguracoesModal';
+import UsuarioMasterForm from '../Cooperativa/UsuarioMasterForm';
 import type { FiltrosCargas as FiltrosCargasType, Carga } from '../../types';
 import { 
   formatarDataHora, 
@@ -40,6 +41,7 @@ export default function CooperativaDashboard() {
   const [showCargas, setShowCargas] = useState(false);
   const [showEmpresas, setShowEmpresas] = useState(false);
   const [showConfiguracoes, setShowConfiguracoes] = useState(false);
+  const [showCadastroMaster, setShowCadastroMaster] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const isDark = false; // Tema fixo claro
   const tema = 'claro' as const; // Tema fixo claro
@@ -220,6 +222,21 @@ export default function CooperativaDashboard() {
                       </svg>
                       Configurações
                     </button>
+
+                    {isMaster && (
+                      <button
+                        onClick={() => {
+                          setShowMenu(false);
+                          setShowCadastroMaster(true);
+                        }}
+                        className={`w-full flex items-center gap-3 px-4 py-3 text-sm transition ${tema === 'escuro' ? 'text-purple-300 hover:bg-gray-700' : 'text-purple-700 hover:bg-purple-50'}`}
+                      >
+                        <svg className={`w-5 h-5 ${tema === 'escuro' ? 'text-purple-400' : 'text-purple-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                        </svg>
+                        Novo Usuário Master
+                      </button>
+                    )}
 
                     <div className="border-t my-1 border-gray-100" />
                     <button
@@ -644,6 +661,18 @@ export default function CooperativaDashboard() {
 
       {/* Modal de Configurações */}
       {showConfiguracoes && <ConfiguracoesModal onClose={() => setShowConfiguracoes(false)} />}
+
+      {/* Modal de Cadastro de Usuário Master */}
+      {showCadastroMaster && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999] overflow-y-auto animate-fade-in">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full my-8 relative z-[10000] animate-fade-in-scale">
+            <UsuarioMasterForm
+              onSuccess={() => setShowCadastroMaster(false)}
+              onCancel={() => setShowCadastroMaster(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
