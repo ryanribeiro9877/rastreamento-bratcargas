@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { buscarEnderecoPorCep, formatarCep } from '../../services/viaCep';
-import { supabase } from '../../services/supabase';
 
 interface EmpresaFormProps {
   onSuccess?: () => void;
@@ -111,9 +110,10 @@ export default function EmpresaForm({ onSuccess, onCancel }: EmpresaFormProps) {
 
       console.log('Iniciando cadastro...');
       
-      // Obter token de sessão do usuário logado
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
+      // Obter token de sessão do usuário logado (via localStorage para evitar travamento)
+      const authKey = Object.keys(localStorage).find(k => k.includes('auth-token'));
+      const accessToken = authKey ? (() => { try { return JSON.parse(localStorage.getItem(authKey) || '{}')?.access_token; } catch { return null; } })() : null;
+      if (!accessToken) {
         throw new Error('Você precisa estar logado para cadastrar uma empresa');
       }
 
@@ -124,7 +124,7 @@ export default function EmpresaForm({ onSuccess, onCancel }: EmpresaFormProps) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
+            'Authorization': `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
             razao_social: formData.razao_social.trim(),
