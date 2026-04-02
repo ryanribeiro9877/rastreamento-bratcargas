@@ -196,8 +196,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signOut() {
     // VULN-012: Invalidar todas as sessões (global) ao fazer logout
-    const { error } = await supabase.auth.signOut({ scope: 'global' });
-    if (error) throw error;
+    // Limpar localStorage primeiro para evitar travamento do supabase.auth.signOut
+    try {
+      const authKey = Object.keys(localStorage).find(k => k.includes('auth-token'));
+      if (authKey) localStorage.removeItem(authKey);
+    } catch { /* ignore */ }
+    // Tentar signOut com timeout para não travar
+    try {
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000));
+      await Promise.race([supabase.auth.signOut({ scope: 'global' }), timeoutPromise]);
+    } catch { /* ignore timeout or errors */ }
+    // Forçar redirecionamento para login
+    window.location.replace('/login');
   }
 
   async function resetPassword(email: string) {
