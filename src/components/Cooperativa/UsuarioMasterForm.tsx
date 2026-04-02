@@ -1,9 +1,21 @@
 import { useState } from 'react';
-import { supabase } from '../../services/supabase';
 
 interface Props {
   onSuccess?: () => void;
   onCancel?: () => void;
+}
+
+function getAccessTokenSync(): string | null {
+  try {
+    const key = Object.keys(localStorage).find(k => k.includes('auth-token'));
+    if (!key) return null;
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.access_token || null;
+  } catch {
+    return null;
+  }
 }
 
 export default function UsuarioMasterForm({ onSuccess, onCancel }: Props) {
@@ -21,8 +33,8 @@ export default function UsuarioMasterForm({ onSuccess, onCancel }: Props) {
       if (!email.trim()) throw new Error('E-mail é obrigatório');
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('E-mail inválido');
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('Sessão expirada. Faça logout e login novamente.');
+      const accessToken = getAccessTokenSync();
+      if (!accessToken) throw new Error('Sessão expirada. Faça logout e login novamente.');
 
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/criar-usuario-master`,
@@ -30,7 +42,7 @@ export default function UsuarioMasterForm({ onSuccess, onCancel }: Props) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
+            'Authorization': `Bearer ${accessToken}`,
           },
           body: JSON.stringify({ nome: nome.trim(), email: email.trim().toLowerCase() }),
         }
