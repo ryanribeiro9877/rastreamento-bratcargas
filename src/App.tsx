@@ -8,11 +8,20 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth, AuthProvider } from './hooks/useAuth';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 
-// Code-splitting: carrega cada dashboard/página apenas quando necessário
-const Login = lazy(() => import('./components/Auth/Login'));
-const EmbarcadorDashboard = lazy(() => import('./components/Dashboard/EmbarcadorDashboard'));
-const CooperativaDashboard = lazy(() => import('./components/Dashboard/CooperativaDashboard'));
-const RastreamentoMotorista = lazy(() => import('./components/Rastreamento/RastreamentoMotorista'));
+// Code-splitting com retry automático para chunks desatualizados após deploy
+function lazyRetry(importFn: () => Promise<any>) {
+  return lazy(() =>
+    importFn().catch(() => {
+      window.location.reload();
+      return { default: () => null };
+    })
+  );
+}
+
+const Login = lazyRetry(() => import('./components/Auth/Login'));
+const EmbarcadorDashboard = lazyRetry(() => import('./components/Dashboard/EmbarcadorDashboard'));
+const CooperativaDashboard = lazyRetry(() => import('./components/Dashboard/CooperativaDashboard'));
+const RastreamentoMotorista = lazyRetry(() => import('./components/Rastreamento/RastreamentoMotorista'));
 
 function SentryFallback({ error }: { error: unknown }) {
   const message = error instanceof Error ? error.message : String(error);
